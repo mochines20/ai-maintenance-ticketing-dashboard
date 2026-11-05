@@ -1,0 +1,31 @@
+{
+  "name": "ai-maintenance-ticketing-dashboard",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently -n API,WEB -c blue,green \"npm run dev:server\" \"npm run dev:client\"",
+    "dev:server": "node --watch server/index.js",
+    "dev:client": "vite --config client/vite.config.js",
+    "build": "vite build --config client/vite.config.js",
+    "start": "node server/index.js",
+    "test": "vitest run --config vitest.config.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "express": "^5.1.0",
+    "openai": "^6.8.1",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "sql.js": "^1.13.0",
+    "zod": "^4.1.12"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^5.1.0",
+    "concurrently": "^9.2.1",
+    "supertest": "^7.1.4",
+    "vite": "^7.2.2",
+    "vitest": "^4.0.8"
+  }
+}
