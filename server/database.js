@@ -137,13 +137,9 @@ export async function createDatabase({ filename = ":memory:" } = {}) {
        FROM tickets
        JOIN reports ON reports.id = tickets.report_id
        ORDER BY
-         CASE tickets.priority
-           WHEN 'Emergency' THEN 1
-           WHEN 'High' THEN 2
-           WHEN 'Medium' THEN 3
-           ELSE 4
-         END,
-         tickets.created_at DESC`,
+         CASE WHEN tickets.priority = 'Emergency' THEN 0 ELSE 1 END,
+         tickets.created_at ASC,
+         tickets.id ASC`,
     ).map(normalizeTicket);
   }
 

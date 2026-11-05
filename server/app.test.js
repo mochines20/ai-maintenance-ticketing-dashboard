@@ -102,6 +102,40 @@ describe("maintenance ticket API", () => {
     expect(response.body.error).toBe("Validation failed.");
   });
 
+  it("orders emergencies first and keeps FIFO order for the remaining queue", async () => {
+    const ticket = (priority, description) => ({
+      issue_type: priority === "Emergency" ? "Gas/Safety" : "Plumbing",
+      priority,
+      unit_number: null,
+      description,
+      missing_information: false,
+      missing_fields: [],
+    });
+
+    await database.createReportWithTickets({
+      report: "First request",
+      processingMode: "test",
+      tickets: [ticket("Medium", "First non-emergency request")],
+    });
+    await database.createReportWithTickets({
+      report: "Second request",
+      processingMode: "test",
+      tickets: [ticket("Low", "Second non-emergency request")],
+    });
+    await database.createReportWithTickets({
+      report: "Emergency request",
+      processingMode: "test",
+      tickets: [ticket("Emergency", "Urgent gas odor reported")],
+    });
+
+    const tickets = (await request(app).get("/api/tickets").expect(200)).body.tickets;
+    expect(tickets.map((item) => item.description)).toEqual([
+      "Urgent gas odor reported",
+      "First non-emergency request",
+      "Second non-emergency request",
+    ]);
+  });
+
   it("rejects invalid status values", async () => {
     await request(app)
       .patch("/api/tickets/1/status")

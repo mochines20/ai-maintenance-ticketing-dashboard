@@ -20,7 +20,7 @@ The review token is consumed after a successful commit, so repeating the same co
 
 ## Workspace design
 
-The interface is intentionally a work surface rather than a decorative dashboard: warm neutral background, low-saturation semantic color, compact operational type, a four-card summary, a prioritized queue, and a persistent ticket inspector. Intake now uses two user-facing stages—`Report` and `Review & Create`. The initial modal is compact and contains only the caller report, sample selector, validation feedback, and Analyze action. After analysis it expands into a two-panel review workspace so the original words and structured extraction remain visible together. Motion is limited to short state transitions and respects `prefers-reduced-motion`.
+The interface is intentionally a work surface rather than a decorative dashboard: warm neutral background, low-saturation semantic color, readable operational type, a four-card summary, an emergency-first FIFO queue, and a persistent ticket inspector. Intake now uses two user-facing stages—`Report` and `Review & Create`. The initial modal is compact and contains only the caller report, sample selector, validation feedback, and Analyze action. After analysis it expands into a two-panel review workspace so the original words and structured extraction remain visible together. Motion is limited to short state transitions and respects `prefers-reduced-motion`.
 
 The report field supports `Ctrl+Enter` / `Cmd+Enter` to analyze, while Escape only dismisses an empty entry state (entered text is preserved rather than silently discarded). A successful save reports the actual number of work orders and offers a direct View work orders action.
 
@@ -70,7 +70,7 @@ Results:
 
 - TypeScript type check passed.
 - Production build passed.
-- 15 automated tests passed across four test files.
+- 16 automated tests passed across four test files.
 - Five controlled pipeline tests covered all client reports.
 - The API/database/status/safety-rule and source-evidence tests passed.
 - The dashboard and compact two-stage intake were visually inspected in desktop and mobile layouts.

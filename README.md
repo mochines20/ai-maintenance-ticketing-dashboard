@@ -15,6 +15,7 @@ A full-stack prototype that turns unstructured caller reports into reviewable ma
 - Deterministic emergency escalation for possible gas leaks, fire or sparking, and water contacting electrical equipment
 - Persistent SQLite file with timestamps and default `New` status
 - Search, status filters, priority indicators, follow-up badges, and status updates
+- Emergency-first work queue with FIFO ordering for all remaining requests
 - Automated API, persistence, safety-rule, and five-report contract tests
 - Conditional live-LLM tests covering all five client reports
 
@@ -224,7 +225,7 @@ Executed on November 6, 2026:
 | TypeScript type check | Passed |
 | Production Vite build | Passed |
 | Automated test files | 4 passed, 1 skipped |
-| Automated test cases | 15 passed, 1 skipped |
+| Automated test cases | 16 passed, 1 skipped |
 | Five-report controlled pipeline suite | 5 passed |
 | Live Groq provider smoke check | Passed with a synthetic non-tenant report; full five client reports were not sent to an external provider |
 | Missing-key API behavior | Verified `503 LLM_NOT_CONFIGURED` |

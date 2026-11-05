@@ -234,6 +234,59 @@ button, input, textarea, select { transition: border-color 180ms var(--ease), ba
 .button-spinner.dark { border-color: #dfe4df; border-top-color: #667085; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
+/* Readability pass: keep the compact workspace while bringing operational text closer to a comfortable 14–16px reading size. */
+.brand strong { font-size: 14px; }
+.brand small { font-size: 10px; }
+.nav-link { font-size: 13px; }
+.global-search input { font-size: 12px; }
+.ai-status { font-size: 10px; }
+.new-report-button { font-size: 12px; }
+.section-kicker { font-size: 10px; }
+.workspace-heading p { font-size: 14px; }
+.kpi-card p { font-size: 11px; }
+.page-message { font-size: 12px; }
+.surface-header p { font-size: 11px; }
+.queue-controls select { font-size: 11px; }
+.work-order-table th { font-size: 9px; }
+.work-order-table td { font-size: 12px; }
+.order-primary strong { font-size: 11px; }
+.order-primary + span { font-size: 9px; }
+.work-order-table td:first-child p { font-size: 12px; }
+.priority-chip { font-size: 9px; }
+.status-pill { font-size: 9px; }
+.inspector-followup strong, .inspector-safety strong { font-size: 11px; }
+.inspector-followup span, .inspector-safety span { font-size: 10px; }
+.inspector-section > h3 { font-size: 16px; }
+.detail-grid dt { font-size: 9px; }
+.detail-grid dd { font-size: 11px; }
+.inspector-section-title h3 { font-size: 11px; }
+.original-report blockquote { font-size: 12px; }
+.status-section label { font-size: 10px; }
+.status-section p { font-size: 10px; }
+.intake-header h2 { font-size: 20px; }
+.intake-subtitle { font-size: 11px; }
+.workflow-steps li { font-size: 10px; }
+.panel-heading p, .panel-heading h3 { font-size: 12px; }
+.panel-heading small { font-size: 10px; }
+.report-form > label { font-size: 10px; }
+.field-meta { font-size: 9px; }
+.configuration-warning { font-size: 10px; }
+.primary-action, .secondary-action { font-size: 11px; }
+.processing-note { font-size: 10px; }
+.sample-select span { font-size: 9px; }
+.sample-select select { font-size: 11px; }
+.keyboard-hint { font-size: 9px; }
+.emergency-banner strong { font-size: 11px; }
+.emergency-banner span { font-size: 10px; }
+.review-card-header > div > span { font-size: 9px; }
+.review-card-header > button { font-size: 9px; }
+.review-fields label > span { font-size: 9px; }
+.review-fields label > span button { font-size: 8px; }
+.review-fields input, .review-fields select, .review-fields textarea { font-size: 10px; }
+.followup-note { font-size: 9px; }
+.add-issue-button { font-size: 9px; }
+.intake-footer p { font-size: 10px; }
+
 @media (max-width: 1120px) {
   .app-header { grid-template-columns: 1fr auto; }
   .app-header nav, .global-search { display: none; }
