@@ -44,6 +44,20 @@ export function createApp({
     response.json({ tickets: database.listTickets() });
   });
 
+  app.get("/api/tickets/:id", (request, response) => {
+    const id = Number.parseInt(request.params.id, 10);
+    if (!Number.isInteger(id) || id < 1) {
+      return response.status(400).json({ error: "Invalid ticket id." });
+    }
+    const ticket = database.getTicket(id);
+    if (!ticket) return response.status(404).json({ error: "Ticket not found." });
+    return response.json({ ticket });
+  });
+
+  app.get("/api/dashboard/summary", (_request, response) => {
+    response.json({ summary: database.getDashboardSummary() });
+  });
+
   app.post("/api/intake/analyze", async (request, response, next) => {
     try {
       const { report } = reportRequestSchema.parse(request.body);

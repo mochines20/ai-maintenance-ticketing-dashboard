@@ -16,6 +16,8 @@ The application accepts a caller or tenant maintenance report, sends it to the c
 8. The server revalidates the reviewed data and safety rules, saves the source report once, and saves every issue as a linked ticket with default status `New`.
 9. A property manager can search, filter, inspect the source report, and change status to `In Progress` or `Done`.
 
+The review token is consumed after a successful commit, so repeating the same commit cannot create a second copy of the work orders.
+
 ## Workspace design
 
 The interface is intentionally a work surface rather than a decorative dashboard: warm neutral background, low-saturation semantic color, compact operational type, a four-card summary, a prioritized queue, and a persistent ticket inspector. Intake now uses two user-facing stages—`Report` and `Review & Create`. The initial modal is compact and contains only the caller report, sample selector, validation feedback, and Analyze action. After analysis it expands into a two-panel review workspace so the original words and structured extraction remain visible together. Motion is limited to short state transitions and respects `prefers-reduced-motion`.
@@ -68,7 +70,7 @@ Results:
 
 - TypeScript type check passed.
 - Production build passed.
-- 14 automated tests passed across four test files.
+- 15 automated tests passed across four test files.
 - Five controlled pipeline tests covered all client reports.
 - The API/database/status/safety-rule and source-evidence tests passed.
 - The dashboard and compact two-stage intake were visually inspected in desktop and mobile layouts.

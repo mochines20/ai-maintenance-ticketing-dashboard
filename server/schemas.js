@@ -28,6 +28,7 @@ export const ticketExtractionSchema = z.object({
   description: z.string().trim().min(8).max(500),
   missing_information: z.boolean(),
   missing_fields: z.array(z.string().trim().min(1).max(50)).max(10),
+  safety_reason: z.string().trim().max(240).nullable().optional(),
   source_evidence: sourceEvidenceSchema,
 });
 

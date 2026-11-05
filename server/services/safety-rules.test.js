@@ -18,6 +18,7 @@ describe("applySafetyRules", () => {
     );
     expect(ticket.priority).toBe("Emergency");
     expect(ticket.issue_type).toBe("Gas/Safety");
+    expect(ticket.safety_reason).toContain("gas");
   });
 
   it("escalates water contacting electrical equipment", () => {
@@ -26,6 +27,13 @@ describe("applySafetyRules", () => {
       [baseTicket],
     );
     expect(ticket.priority).toBe("Emergency");
+    expect(ticket.safety_reason).toContain("electrical");
+  });
+
+  it("does not escalate a clearly negated gas mention", () => {
+    const [ticket] = applySafetyRules("There is no gas smell in the apartment.", [baseTicket]);
+    expect(ticket.priority).toBe("Low");
+    expect(ticket.safety_reason).toBeUndefined();
   });
 
   it("marks a missing unit for follow-up without inventing one", () => {

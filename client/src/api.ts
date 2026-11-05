@@ -1,6 +1,7 @@
 import type {
   AnalyzeReportResponse,
   CreateReportResponse,
+  DashboardSummary,
   ExtractedTicket,
   HealthResponse,
   Ticket,
@@ -23,6 +24,10 @@ export function getHealth(): Promise<HealthResponse> {
 
 export function getTickets(): Promise<TicketListResponse> {
   return request<TicketListResponse>("/api/tickets");
+}
+
+export function getDashboardSummary(): Promise<{ summary: DashboardSummary }> {
+  return request<{ summary: DashboardSummary }>("/api/dashboard/summary");
 }
 
 export function analyzeReport(report: string): Promise<AnalyzeReportResponse> {

@@ -9,12 +9,14 @@ import {
 import {
   analyzeReport,
   commitAnalysis,
+  getDashboardSummary,
   getHealth,
   getTickets,
   updateTicketStatus,
 } from "./api";
 import type {
   AnalyzeReportResponse,
+  DashboardSummary,
   ExtractedTicket,
   IssueType,
   Priority,
@@ -266,7 +268,7 @@ function IntakeDialog({ open, aiConfigured, onClose, onCreated, onViewWorkOrders
         <section className="extraction-panel">
           <div className="panel-heading"><span className="ai-mark"><Icon name="spark" /></span><div><h3 ref={reviewHeadingRef} tabIndex={-1}>Extracted work orders</h3><small>{tickets.length} issue{tickets.length === 1 ? "" : "s"} detected · linked to this report</small></div></div>
           <div className="review-content">
-            {tickets.some((ticket) => ticket.priority === "Emergency") && <div className="emergency-banner"><Icon name="alert" /><div><strong>Immediate safety risk detected</strong><span>Emergency priority will be enforced again when the review is saved.</span></div></div>}
+            {tickets.some((ticket) => ticket.priority === "Emergency") && <div className="emergency-banner"><Icon name="alert" /><div><strong>Immediate safety risk detected</strong><span>{tickets.find((ticket) => ticket.priority === "Emergency")?.safety_reason || "Emergency priority will be enforced again when the review is saved."}</span></div></div>}
             <div className="review-list">
               {tickets.map((ticket, index) => <article className="review-card" key={`${index}-${ticket.issue_type}`}>
                 <div className="review-card-header"><div><span>Work order {index + 1}</span><PriorityBadge priority={ticket.priority} /></div>{tickets.length > 1 && <button type="button" onClick={() => setTickets((current) => current.filter((_, ticketIndex) => ticketIndex !== index))}>Remove</button>}</div>
@@ -300,6 +302,7 @@ function TicketInspector({ ticket, updating, onStatusChange }: TicketInspectorPr
   return <aside className="inspector" key={ticket.id}>
     <div className="inspector-top"><div><span className="section-kicker">Ticket inspector</span><h2>WO-{String(ticket.id).padStart(4, "0")}</h2></div><PriorityBadge priority={ticket.priority} /></div>
     {ticket.missing_information && <div className="inspector-followup"><Icon name="follow" size={16} /><div><strong>Needs follow-up</strong><span>{ticket.missing_fields.map((field) => field.replaceAll("_", " ")).join(", ")}</span></div></div>}
+    {ticket.safety_reason && <div className="inspector-safety"><Icon name="alert" size={16} /><div><strong>Safety escalation</strong><span>{ticket.safety_reason}</span></div></div>}
     <section className="inspector-section"><h3>{ticket.description}</h3><dl className="detail-grid"><div><dt>Category</dt><dd>{ticket.issue_type}</dd></div><div><dt>Unit</dt><dd>{ticket.unit_number || "Unit not provided"}</dd></div><div><dt>Created</dt><dd>{formatDate(ticket.created_at)}</dd></div><div><dt>Source report</dt><dd>#{ticket.report_id}</dd></div></dl></section>
     <section className="inspector-section original-report"><div className="inspector-section-title"><Icon name="clipboard" size={15} /><h3>Original report</h3></div><blockquote>{ticket.original_text}</blockquote></section>
     <section className="inspector-section status-section"><label htmlFor={`status-${ticket.id}`}>Workflow status</label><select id={`status-${ticket.id}`} value={ticket.status} disabled={updating} onChange={(event) => void onStatusChange(ticket.id, event.target.value as TicketStatus)}>{statusOptions.map((status) => <option key={status}>{status}</option>)}</select><p>Priority and follow-up are managed separately from workflow status.</p></section>
@@ -308,6 +311,7 @@ function TicketInspector({ ticket, updating, onStatusChange }: TicketInspectorPr
 
 export default function App() {
   const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [kpis, setKpis] = useState<DashboardSummary>({ openWorkOrders: 0, openEmergencies: 0, needsFollowUp: 0, completedWorkOrders: 0 });
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [updatingId, setUpdatingId] = useState<number | null>(null);
@@ -323,9 +327,10 @@ export default function App() {
 
   async function loadTickets(preferredId?: number) {
     try {
-      const data = await getTickets();
-      setTickets(data.tickets);
-      setSelectedId((current) => preferredId ?? current ?? data.tickets[0]?.id ?? null);
+      const [ticketData, summaryData] = await Promise.all([getTickets(), getDashboardSummary()]);
+      setTickets(ticketData.tickets);
+      setKpis(summaryData.summary);
+      setSelectedId((current) => preferredId ?? current ?? ticketData.tickets[0]?.id ?? null);
       setError("");
     } catch (loadError) {
       setError(errorMessage(loadError));
@@ -338,13 +343,6 @@ export default function App() {
     void loadTickets();
     getHealth().then((health) => setAiConfigured(health.ai.configured)).catch((healthError: unknown) => setError(errorMessage(healthError)));
   }, []);
-
-  const kpis = useMemo(() => ({
-    open: tickets.filter((ticket) => ticket.status !== "Done").length,
-    emergencies: tickets.filter((ticket) => ticket.status !== "Done" && ticket.priority === "Emergency").length,
-    followup: tickets.filter((ticket) => ticket.status !== "Done" && ticket.missing_information).length,
-    completed: tickets.filter((ticket) => ticket.status === "Done").length,
-  }), [tickets]);
 
   const visibleTickets = useMemo(() => {
     const lowerQuery = query.trim().toLocaleLowerCase();
@@ -368,6 +366,7 @@ export default function App() {
     try {
       const { ticket } = await updateTicketStatus(id, status);
       setTickets((current) => current.map((item) => item.id === id ? ticket : item));
+      void loadTickets(id);
       setNotice(`WO-${String(id).padStart(4, "0")} moved to ${status}.`);
       window.setTimeout(() => setNotice(""), 2600);
     } catch (statusError) {
@@ -395,7 +394,7 @@ export default function App() {
     <main id="workspace" className="workspace">
       <section className="workspace-heading"><div><span className="section-kicker">Property operations</span><h1>Maintenance workspace</h1><p>Review what needs attention, understand the source, and move work forward.</p></div><button className="mobile-new-report" type="button" onClick={() => setIntakeOpen(true)}><Icon name="plus" size={16} />New report</button></section>
 
-      <section className="kpi-grid" aria-label="Maintenance summary"><KpiCard label="Open work orders" value={kpis.open} icon="clipboard" /><KpiCard label="Open emergencies" value={kpis.emergencies} icon="alert" tone="risk" /><KpiCard label="Needs follow-up" value={kpis.followup} icon="follow" tone="warning" /><KpiCard label="Completed work orders" value={kpis.completed} icon="check" tone="complete" /></section>
+      <section className="kpi-grid" aria-label="Maintenance summary"><KpiCard label="Open work orders" value={kpis.openWorkOrders} icon="clipboard" /><KpiCard label="Open emergencies" value={kpis.openEmergencies} icon="alert" tone="risk" /><KpiCard label="Needs follow-up" value={kpis.needsFollowUp} icon="follow" tone="warning" /><KpiCard label="Completed work orders" value={kpis.completedWorkOrders} icon="check" tone="complete" /></section>
 
       {error && <div className="page-message error" role="alert"><Icon name="alert" size={16} />{error}</div>}
       {notice && <div className="page-message success" role="status"><Icon name="check" size={16} />{notice}</div>}

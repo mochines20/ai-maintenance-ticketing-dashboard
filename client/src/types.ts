@@ -17,6 +17,7 @@ export interface ExtractedTicket {
   description: string;
   missing_information: boolean;
   missing_fields: string[];
+  safety_reason?: string | null;
   source_evidence: SourceEvidence;
 }
 
@@ -29,6 +30,7 @@ export interface Ticket {
   description: string;
   missing_information: boolean;
   missing_fields: string[];
+  safety_reason: string | null;
   status: TicketStatus;
   created_at: string;
   updated_at: string;
@@ -38,6 +40,13 @@ export interface Ticket {
 
 export interface TicketListResponse {
   tickets: Ticket[];
+}
+
+export interface DashboardSummary {
+  openWorkOrders: number;
+  openEmergencies: number;
+  needsFollowUp: number;
+  completedWorkOrders: number;
 }
 
 export interface CreateReportResponse {

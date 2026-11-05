@@ -25,6 +25,7 @@ const schema = `
     description TEXT NOT NULL,
     missing_information INTEGER NOT NULL DEFAULT 0,
     missing_fields TEXT NOT NULL DEFAULT '[]',
+    safety_reason TEXT,
     status TEXT NOT NULL DEFAULT 'New',
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
@@ -50,6 +51,7 @@ function normalizeTicket(row) {
     ...row,
     missing_information: Boolean(row.missing_information),
     missing_fields: JSON.parse(row.missing_fields || "[]"),
+    safety_reason: row.safety_reason || null,
   };
 }
 
@@ -67,6 +69,10 @@ export async function createDatabase({ filename = ":memory:" } = {}) {
 
   const database = new SQL.Database(initialData);
   database.run(schema);
+  const ticketColumns = rowsFromStatement(database, "PRAGMA table_info(tickets)");
+  if (!ticketColumns.some((column) => column.name === "safety_reason")) {
+    database.run("ALTER TABLE tickets ADD COLUMN safety_reason TEXT");
+  }
 
   async function persist() {
     if (filename === ":memory:") return;
@@ -92,8 +98,8 @@ export async function createDatabase({ filename = ":memory:" } = {}) {
         database.run(
           `INSERT INTO tickets (
             report_id, issue_type, priority, unit_number, description,
-            missing_information, missing_fields, status, created_at, updated_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, 'New', ?, ?)`,
+            missing_information, missing_fields, safety_reason, status, created_at, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'New', ?, ?)`,
           [
             reportId,
             ticket.issue_type,
@@ -102,6 +108,7 @@ export async function createDatabase({ filename = ":memory:" } = {}) {
             ticket.description,
             ticket.missing_information ? 1 : 0,
             JSON.stringify(ticket.missing_fields),
+            ticket.safety_reason || null,
             timestamp,
             timestamp,
           ],
@@ -140,6 +147,36 @@ export async function createDatabase({ filename = ":memory:" } = {}) {
     ).map(normalizeTicket);
   }
 
+  function getTicket(id) {
+    const row = rowsFromStatement(
+      database,
+      `SELECT tickets.*, reports.original_text, reports.processing_mode
+       FROM tickets
+       JOIN reports ON reports.id = tickets.report_id
+       WHERE tickets.id = ?`,
+      [id],
+    )[0];
+    return row ? normalizeTicket(row) : null;
+  }
+
+  function getDashboardSummary() {
+    const row = rowsFromStatement(
+      database,
+      `SELECT
+        COALESCE(SUM(CASE WHEN status IN ('New', 'In Progress') THEN 1 ELSE 0 END), 0) AS open_work_orders,
+        COALESCE(SUM(CASE WHEN status <> 'Done' AND priority = 'Emergency' THEN 1 ELSE 0 END), 0) AS open_emergencies,
+        COALESCE(SUM(CASE WHEN status <> 'Done' AND missing_information = 1 THEN 1 ELSE 0 END), 0) AS needs_follow_up,
+        COALESCE(SUM(CASE WHEN status = 'Done' THEN 1 ELSE 0 END), 0) AS completed_work_orders
+       FROM tickets`,
+    )[0];
+    return {
+      openWorkOrders: Number(row.open_work_orders),
+      openEmergencies: Number(row.open_emergencies),
+      needsFollowUp: Number(row.needs_follow_up),
+      completedWorkOrders: Number(row.completed_work_orders),
+    };
+  }
+
   async function updateTicketStatus(id, status) {
     const timestamp = new Date().toISOString();
     database.run(
@@ -149,20 +186,14 @@ export async function createDatabase({ filename = ":memory:" } = {}) {
 
     if (database.getRowsModified() === 0) return null;
     await persist();
-    const row = rowsFromStatement(
-      database,
-      `SELECT tickets.*, reports.original_text, reports.processing_mode
-       FROM tickets
-       JOIN reports ON reports.id = tickets.report_id
-       WHERE tickets.id = ?`,
-      [id],
-    )[0];
-    return normalizeTicket(row);
+    return getTicket(id);
   }
 
   return {
     createReportWithTickets,
     listTickets,
+    getTicket,
+    getDashboardSummary,
     updateTicketStatus,
     async close() {
       await persist();

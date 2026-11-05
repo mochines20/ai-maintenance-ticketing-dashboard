@@ -171,10 +171,21 @@ The response contains an `analysisId`, the untouched original report, and one or
 `POST /api/intake/:analysisId/commit`
 
 Send the reviewed `tickets` array returned by the analysis call. The server reapplies validation and safety rules before storing the report and linked work orders. Review sessions expire after 15 minutes and are intentionally not durable.
+Each review session is one-time use: a retry after a successful commit returns `ANALYSIS_NOT_FOUND` and cannot create duplicate work orders.
 
 ### List work orders
 
 `GET /api/tickets`
+
+### Get one work order
+
+`GET /api/tickets/:id`
+
+### Dashboard summary
+
+`GET /api/dashboard/summary`
+
+The summary is calculated from persisted SQLite rows (open work orders, open emergencies, follow-up flags, and completed work orders), so the KPI cards do not depend on a client-side approximation.
 
 ### Update status
 
@@ -209,7 +220,7 @@ Executed on November 6, 2026:
 | TypeScript type check | Passed |
 | Production Vite build | Passed |
 | Automated test files | 4 passed, 1 skipped |
-| Automated test cases | 14 passed, 1 skipped |
+| Automated test cases | 15 passed, 1 skipped |
 | Five-report controlled pipeline suite | 5 passed |
 | Live Gemini provider check | One real extraction passed; remaining five-report calls were blocked by the supplied key's Gemini free-tier quota |
 | Missing-key API behavior | Verified `503 LLM_NOT_CONFIGURED` |

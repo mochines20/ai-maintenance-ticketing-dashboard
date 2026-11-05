@@ -1,4 +1,5 @@
 import OpenAI from "openai";
+import { GoogleGenAI } from "@google/genai";
 import { config } from "../config.js";
 import {
   extractionJsonSchema,
@@ -16,30 +17,6 @@ For each source_evidence value, copy one short exact phrase from the tenant repo
 Use concise factual descriptions. Return only data matching the supplied schema.`;
 
 const nullableEvidenceFields = ["issue_type", "priority", "unit_number", "description"];
-
-function toGeminiResponseSchema(schema) {
-  if (Array.isArray(schema)) return schema.map((item) => toGeminiResponseSchema(item));
-  if (!schema || typeof schema !== "object") return schema;
-
-  const result = {};
-  for (const [key, value] of Object.entries(schema)) {
-    if (key === "additionalProperties") continue;
-    if (key === "type" && Array.isArray(value)) {
-      result.type = value.find((type) => type !== "null") || "string";
-      continue;
-    }
-    if (key === "properties") {
-      result.properties = Object.fromEntries(
-        Object.entries(value).map(([name, property]) => [name, toGeminiResponseSchema(property)]),
-      );
-      continue;
-    }
-    result[key] = toGeminiResponseSchema(value);
-  }
-  return result;
-}
-
-const geminiResponseSchema = toGeminiResponseSchema(extractionJsonSchema);
 
 function normalizeGeminiOutput(value) {
   return {
@@ -110,42 +87,20 @@ async function extractWithOpenAI(report) {
 }
 
 async function extractWithGemini(report) {
-  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(config.geminiModel)}:generateContent`;
-
   try {
-    const response = await fetch(endpoint, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-goog-api-key": config.geminiApiKey,
+    const client = new GoogleGenAI({ apiKey: config.geminiApiKey });
+    const response = await client.models.generateContent({
+      model: config.geminiModel,
+      contents: `Tenant maintenance report:\n${report}`,
+      config: {
+        systemInstruction: `${instructions}\nFor this provider response, represent missing unit_number and unsupported source_evidence values as empty strings; the server converts them to null before validation.`,
+        responseMimeType: "application/json",
+        responseJsonSchema: extractionJsonSchema,
+        temperature: 0,
       },
-      body: JSON.stringify({
-        systemInstruction: {
-          parts: [{
-            text: `${instructions}\nFor this provider response, represent missing unit_number and unsupported source_evidence values as empty strings; the server converts them to null before validation.`,
-          }],
-        },
-        contents: [{
-          role: "user",
-          parts: [{ text: `Tenant maintenance report:\n${report}` }],
-        }],
-        generationConfig: {
-          responseMimeType: "application/json",
-          responseSchema: geminiResponseSchema,
-          temperature: 0,
-        },
-      }),
     });
 
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      throw new Error(payload?.error?.message || `Gemini request failed with HTTP ${response.status}.`);
-    }
-
-    const outputText = payload?.candidates?.[0]?.content?.parts
-      ?.map((part) => part.text || "")
-      .join("")
-      .trim();
+    const outputText = response.text?.trim();
     if (!outputText) {
       throw new Error("The model returned no structured output.");
     }

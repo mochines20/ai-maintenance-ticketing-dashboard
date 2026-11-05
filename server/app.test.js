@@ -54,6 +54,27 @@ describe("maintenance ticket API", () => {
     expect(created.body.tickets).toHaveLength(1);
     expect(created.body.tickets[0].status).toBe("New");
 
+    await request(app)
+      .post(`/api/intake/${analyzed.body.analysisId}/commit`)
+      .send({ tickets: analyzed.body.tickets })
+      .expect(404);
+    expect((await request(app).get("/api/tickets")).body.tickets).toHaveLength(1);
+
+    const detail = await request(app)
+      .get(`/api/tickets/${created.body.tickets[0].id}`)
+      .expect(200);
+    expect(detail.body.ticket.id).toBe(created.body.tickets[0].id);
+
+    const summaryBeforeStatus = await request(app)
+      .get("/api/dashboard/summary")
+      .expect(200);
+    expect(summaryBeforeStatus.body.summary).toEqual({
+      openWorkOrders: 1,
+      openEmergencies: 0,
+      needsFollowUp: 0,
+      completedWorkOrders: 0,
+    });
+
     const listed = await request(app).get("/api/tickets").expect(200);
     expect(listed.body.tickets).toHaveLength(1);
 
@@ -62,6 +83,15 @@ describe("maintenance ticket API", () => {
       .send({ status: "In Progress" })
       .expect(200);
     expect(updated.body.ticket.status).toBe("In Progress");
+
+    await request(app)
+      .patch(`/api/tickets/${created.body.tickets[0].id}/status`)
+      .send({ status: "Done" })
+      .expect(200);
+    const summaryAfterDone = await request(app)
+      .get("/api/dashboard/summary")
+      .expect(200);
+    expect(summaryAfterDone.body.summary.completedWorkOrders).toBe(1);
   });
 
   it("rejects reports that are too short", async () => {
