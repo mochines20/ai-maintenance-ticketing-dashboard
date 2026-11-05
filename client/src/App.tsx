@@ -35,6 +35,7 @@ const sampleReports = [
 const statusOptions: TicketStatus[] = ["New", "In Progress", "Done"];
 const priorityOptions: Priority[] = ["Low", "Medium", "High", "Emergency"];
 const issueOptions: IssueType[] = ["Plumbing", "Electrical", "HVAC", "Gas/Safety", "Structural", "Appliance", "General", "Other"];
+const queuePageSize = 5;
 
 type IconName = "home" | "plus" | "search" | "alert" | "follow" | "check" | "clipboard" | "close" | "spark" | "map" | "calendar" | "building" | "chevron" | "edit";
 
@@ -320,6 +321,7 @@ export default function App() {
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"All" | "Open" | TicketStatus>("All");
   const [sort, setSort] = useState<"attention" | "newest" | "unit">("attention");
+  const [queuePage, setQueuePage] = useState(0);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
   const [recentIds, setRecentIds] = useState<Set<number>>(new Set());
@@ -361,6 +363,28 @@ export default function App() {
           || a.id - b.id;
       });
   }, [tickets, query, statusFilter, sort]);
+
+  const queuePageCount = Math.max(1, Math.ceil(visibleTickets.length / queuePageSize));
+  const pageTickets = useMemo(
+    () => visibleTickets.slice(queuePage * queuePageSize, (queuePage + 1) * queuePageSize),
+    [visibleTickets, queuePage],
+  );
+  const pageStart = visibleTickets.length === 0 ? 0 : queuePage * queuePageSize + 1;
+  const pageEnd = Math.min((queuePage + 1) * queuePageSize, visibleTickets.length);
+
+  useEffect(() => {
+    setQueuePage(0);
+  }, [query, statusFilter, sort]);
+
+  useEffect(() => {
+    setQueuePage((current) => Math.min(current, queuePageCount - 1));
+  }, [queuePageCount]);
+
+  useEffect(() => {
+    if (selectedId == null) return;
+    const selectedIndex = visibleTickets.findIndex((ticket) => ticket.id === selectedId);
+    if (selectedIndex >= 0) setQueuePage(Math.floor(selectedIndex / queuePageSize));
+  }, [selectedId, visibleTickets]);
 
   const selectedTicket = tickets.find((ticket) => ticket.id === selectedId) || null;
 
@@ -409,11 +433,12 @@ export default function App() {
 
       <section className="operations-grid" ref={queueRef}>
         <section className="attention-surface">
-          <header className="surface-header"><div><span className="section-kicker">Prioritized work</span><h2>Attention queue</h2><p>{visibleTickets.length} of {tickets.length} work orders · Emergency first, then oldest request</p></div><div className="queue-controls"><label><span className="sr-only">Filter by status</span><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as typeof statusFilter)}><option>All</option><option>Open</option>{statusOptions.map((status) => <option key={status}>{status}</option>)}</select></label><label><span className="sr-only">Sort work orders</span><select value={sort} onChange={(event) => setSort(event.target.value as typeof sort)}><option value="attention">Emergency first · FIFO</option><option value="newest">Newest first</option><option value="unit">Unit number</option></select></label></div></header>
+          <header className="surface-header"><div><span className="section-kicker">Prioritized work</span><h2>Attention queue</h2><p>{visibleTickets.length === 0 ? `0 of ${tickets.length}` : `Showing ${pageStart}–${pageEnd} of ${visibleTickets.length}`} work orders · Emergency first, then oldest request</p></div><div className="queue-controls"><label><span className="sr-only">Filter by status</span><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as typeof statusFilter)}><option>All</option><option>Open</option>{statusOptions.map((status) => <option key={status}>{status}</option>)}</select></label><label><span className="sr-only">Sort work orders</span><select value={sort} onChange={(event) => setSort(event.target.value as typeof sort)}><option value="attention">Emergency first · FIFO</option><option value="newest">Newest first</option><option value="unit">Unit number</option></select></label></div></header>
 
-          <div className={`table-wrap ${visibleTickets.length > 10 ? "table-wrap-scroll" : ""}`}>
-            {loading ? <div className="queue-empty"><span className="button-spinner dark" /><h3>Loading work orders</h3></div> : ticketsLoadFailed && tickets.length === 0 ? <div className="queue-empty queue-error"><span><Icon name="alert" size={24} /></span><h3>Work orders unavailable</h3><p>We couldn't load the queue. Retry the request to try again.</p><button type="button" onClick={handleRetry}>Retry</button></div> : visibleTickets.length === 0 ? <div className="queue-empty"><span><Icon name="check" size={24} /></span><h3>No matching work orders</h3><p>{tickets.length === 0 ? "Analyze a caller report to create the first work order." : "Try a different search or status filter."}</p><button type="button" onClick={() => setIntakeOpen(true)}>Create new report</button></div> : <table className="work-order-table"><thead><tr><th>Work order</th><th>Unit</th><th>Priority</th><th>Status</th><th>Updated</th><th><span className="sr-only">Open</span></th></tr></thead><tbody>{visibleTickets.map((ticket) => <tr key={ticket.id} className={`${selectedId === ticket.id ? "selected" : ""} ${recentIds.has(ticket.id) ? "new-row" : ""}`} onClick={() => setSelectedId(ticket.id)} tabIndex={0} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setSelectedId(ticket.id); } }}><td><div className="order-primary"><strong>WO-{String(ticket.id).padStart(4, "0")}</strong>{ticket.missing_information && <span className="followup-dot" title="Needs follow-up"><Icon name="follow" size={13} /></span>}</div><span>{ticket.issue_type}</span><p>{ticket.description}</p></td><td>{ticket.unit_number || <span className="not-provided">Not provided</span>}</td><td><PriorityBadge priority={ticket.priority} /></td><td><span className={`status-pill status-${ticket.status.toLowerCase().replace(" ", "-")}`}>{ticket.status}</span></td><td>{formatDate(ticket.updated_at)}</td><td><Icon name="chevron" size={15} /></td></tr>)}</tbody></table>}
+          <div className="table-wrap">
+            {loading ? <div className="queue-empty"><span className="button-spinner dark" /><h3>Loading work orders</h3></div> : ticketsLoadFailed && tickets.length === 0 ? <div className="queue-empty queue-error"><span><Icon name="alert" size={24} /></span><h3>Work orders unavailable</h3><p>We couldn't load the queue. Retry the request to try again.</p><button type="button" onClick={handleRetry}>Retry</button></div> : visibleTickets.length === 0 ? <div className="queue-empty"><span><Icon name="check" size={24} /></span><h3>No matching work orders</h3><p>{tickets.length === 0 ? "Analyze a caller report to create the first work order." : "Try a different search or status filter."}</p><button type="button" onClick={() => setIntakeOpen(true)}>Create new report</button></div> : <table className="work-order-table"><thead><tr><th>Work order</th><th>Unit</th><th>Priority</th><th>Status</th><th>Updated</th><th><span className="sr-only">Open</span></th></tr></thead><tbody>{pageTickets.map((ticket) => <tr key={ticket.id} className={`${selectedId === ticket.id ? "selected" : ""} ${recentIds.has(ticket.id) ? "new-row" : ""}`} onClick={() => setSelectedId(ticket.id)} tabIndex={0} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setSelectedId(ticket.id); } }}><td><div className="order-primary"><strong>WO-{String(ticket.id).padStart(4, "0")}</strong>{ticket.missing_information && <span className="followup-dot" title="Needs follow-up"><Icon name="follow" size={13} /></span>}</div><span>{ticket.issue_type}</span><p>{ticket.description}</p></td><td>{ticket.unit_number || <span className="not-provided">Not provided</span>}</td><td><PriorityBadge priority={ticket.priority} /></td><td><span className={`status-pill status-${ticket.status.toLowerCase().replace(" ", "-")}`}>{ticket.status}</span></td><td>{formatDate(ticket.updated_at)}</td><td><Icon name="chevron" size={15} /></td></tr>)}</tbody></table>}
           </div>
+           {!loading && !ticketsLoadFailed && queuePageCount > 1 && <nav className="queue-pagination" aria-label="Work order pages"><span>Showing {pageStart}–{pageEnd} of {visibleTickets.length}</span><div><button type="button" onClick={() => setQueuePage((current) => Math.max(0, current - 1))} disabled={queuePage === 0}>Previous</button><span aria-current="page">Page {queuePage + 1} of {queuePageCount}</span><button type="button" onClick={() => setQueuePage((current) => Math.min(queuePageCount - 1, current + 1))} disabled={queuePage === queuePageCount - 1}>Next</button></div></nav>}
         </section>
 
         <TicketInspector ticket={selectedTicket} updating={updatingId === selectedTicket?.id} onStatusChange={handleStatusChange} />
