@@ -46,6 +46,15 @@ SQLite persistence --> React workspace and status updates
 
 `POST /api/intake/analyze` creates a short-lived, in-memory review session and does not write to SQLite. After the user reviews or corrects every extracted issue, `POST /api/intake/:analysisId/commit` revalidates the data and safety rules, inserts the source report once, and inserts each issue into `tickets` with the same `report_id`.
 
+## Intake workflow
+
+The user-facing intake is deliberately two-stage:
+
+1. **Report** — enter the caller's exact words, choose a compact client sample if useful, and select **Analyze report**. `Ctrl+Enter` / `Cmd+Enter` also starts analysis from the textarea.
+2. **Review & Create** — inspect the original report beside editable, validated work-order fields, then select **Create Work Order** or **Create Work Orders** once.
+
+AI analysis is a processing state inside the first stage, not a separate wizard screen. The initial modal stays compact and does not render an empty extraction panel. Escape preserves a non-empty report instead of silently discarding it. After a confirmed database save, the success state reports the actual created count and links directly back to the work-order queue.
+
 ## Requirements
 
 - Node.js 20 or newer
@@ -188,7 +197,7 @@ The model response must satisfy both strict JSON Schema and Zod. Any claimed evi
 
 ## Test status
 
-Executed on November 5, 2026:
+Executed on November 6, 2026:
 
 | Check | Result |
 | --- | --- |
@@ -199,7 +208,8 @@ Executed on November 5, 2026:
 | Five-report controlled pipeline suite | 5 passed |
 | Live OpenAI five-report suite | 5 skipped because no API key was available |
 | Missing-key API behavior | Verified `503 LLM_NOT_CONFIGURED` |
-| Responsive UI review | Passed on desktop and mobile layouts after correcting a narrow-screen intake overflow |
+| Responsive UI review | Passed on desktop and mobile layouts; compact intake and review workspace checked after refinement |
+| Keyboard and interaction QA | Sample selector, Ctrl/Cmd+Enter hint, safe Escape behavior, focus transition, and no browser console errors verified |
 
 The five controlled tests exercise API validation, safety escalation, multiple-ticket persistence, missing-information handling, and default status using an injected test double. They do not claim to measure model quality. The separate live suite is the authoritative LLM test and must be run with a real key before submission results are recorded.
 

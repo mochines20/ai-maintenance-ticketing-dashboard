@@ -18,7 +18,9 @@ The application accepts a caller or tenant maintenance report, sends it to OpenA
 
 ## Workspace design
 
-The interface is intentionally a work surface rather than a decorative dashboard: warm neutral background, low-saturation semantic color, compact operational type, a four-card summary, a prioritized queue, and a persistent ticket inspector. The intake becomes a contextual two-panel workspace so the original words and structured extraction remain visible together. Motion is limited to short state transitions and respects `prefers-reduced-motion`.
+The interface is intentionally a work surface rather than a decorative dashboard: warm neutral background, low-saturation semantic color, compact operational type, a four-card summary, a prioritized queue, and a persistent ticket inspector. Intake now uses two user-facing stages—`Report` and `Review & Create`. The initial modal is compact and contains only the caller report, sample selector, validation feedback, and Analyze action. After analysis it expands into a two-panel review workspace so the original words and structured extraction remain visible together. Motion is limited to short state transitions and respects `prefers-reduced-motion`.
+
+The report field supports `Ctrl+Enter` / `Cmd+Enter` to analyze, while Escape only dismisses an empty entry state (entered text is preserved rather than silently discarded). A successful save reports the actual number of work orders and offers a direct View work orders action.
 
 ## Handling important edge cases
 
@@ -54,7 +56,7 @@ Analysis and persistence are separate API actions. This prevents an unreviewed e
 
 ## Actual verification performed
 
-The following commands were executed successfully on November 5, 2026:
+The following commands were executed successfully on November 6, 2026:
 
 ```bash
 npm run typecheck
@@ -69,7 +71,8 @@ Results:
 - 14 automated tests passed across four test files.
 - Five controlled pipeline tests covered all client reports.
 - The API/database/status/safety-rule and source-evidence tests passed.
-- The dashboard and contextual intake were visually inspected in desktop and mobile layouts.
+- The dashboard and compact two-stage intake were visually inspected in desktop and mobile layouts.
+- Sample selection, report preservation on Escape, the reduced two-stage indicator, normal-user AI-unavailable messaging, and browser console output were checked in the live local preview.
 - The missing-key path was exercised and correctly returned `503 LLM_NOT_CONFIGURED`.
 
 ## Verification not performed

@@ -91,27 +91,44 @@ interface IntakeDialogProps {
   aiConfigured: boolean | null;
   onClose: () => void;
   onCreated: (tickets: Ticket[]) => void;
+  onViewWorkOrders: () => void;
 }
 
 type IntakePhase = "entry" | "analyzing" | "review" | "saving" | "success";
 
-function IntakeDialog({ open, aiConfigured, onClose, onCreated }: IntakeDialogProps) {
+function IntakeDialog({ open, aiConfigured, onClose, onCreated, onViewWorkOrders }: IntakeDialogProps) {
   const [phase, setPhase] = useState<IntakePhase>("entry");
   const [report, setReport] = useState("");
   const [analysis, setAnalysis] = useState<AnalyzeReportResponse | null>(null);
   const [tickets, setTickets] = useState<ExtractedTicket[]>([]);
   const [activeEvidence, setActiveEvidence] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const [sampleChoice, setSampleChoice] = useState("");
+  const [createdCount, setCreatedCount] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const reportRef = useRef(report);
+  const reviewHeadingRef = useRef<HTMLHeadingElement>(null);
+  const successHeadingRef = useRef<HTMLHeadingElement>(null);
+  reportRef.current = report;
 
-  function resetAndClose() {
-    if (phase === "analyzing" || phase === "saving") return;
+  function resetAndClose(force = false) {
+    if (!force && (phase === "analyzing" || phase === "saving")) return;
+    if (!force && phase === "review") {
+      setError("Reviewed changes are not saved yet. Create the work orders or go back to the report.");
+      return;
+    }
+    if (!force && phase === "entry" && reportRef.current.trim()) {
+      setError("Your report is still entered. Review it before closing or clear the field.");
+      return;
+    }
     setPhase("entry");
     setReport("");
     setAnalysis(null);
     setTickets([]);
     setActiveEvidence(null);
     setError("");
+    setSampleChoice("");
+    setCreatedCount(0);
     onClose();
   }
 
@@ -121,19 +138,24 @@ function IntakeDialog({ open, aiConfigured, onClose, onCreated }: IntakeDialogPr
       if (event.key === "Escape") resetAndClose();
     };
     window.addEventListener("keydown", handleKey);
-    window.setTimeout(() => textareaRef.current?.focus(), 0);
+    window.setTimeout(() => {
+      if (phase === "review") reviewHeadingRef.current?.focus();
+      else if (phase === "success") successHeadingRef.current?.focus();
+      else textareaRef.current?.focus();
+    }, 0);
     return () => window.removeEventListener("keydown", handleKey);
   }, [open, phase]);
 
   if (!open) return null;
 
-  const stepIndex = phase === "entry" ? 0 : phase === "analyzing" ? 1 : phase === "review" || phase === "saving" ? 2 : 3;
-  const steps = ["Report entered", "AI analysis", "Human review", "Work orders created"];
-
-  async function handleAnalyze(event: FormEvent) {
-    event.preventDefault();
+  async function submitAnalysis() {
+    if (phase !== "entry") return;
     if (report.trim().length < 10) {
       setError("Enter a complete maintenance report before analysis.");
+      return;
+    }
+    if (aiConfigured === false) {
+      setError("AI analysis is currently unavailable. Please contact the system administrator.");
       return;
     }
     setPhase("analyzing");
@@ -147,6 +169,11 @@ function IntakeDialog({ open, aiConfigured, onClose, onCreated }: IntakeDialogPr
       setError(errorMessage(analysisError));
       setPhase("entry");
     }
+  }
+
+  function handleAnalyze(event: FormEvent) {
+    event.preventDefault();
+    void submitAnalysis();
   }
 
   function updateTicket(index: number, patch: Partial<ExtractedTicket>) {
@@ -172,6 +199,16 @@ function IntakeDialog({ open, aiConfigured, onClose, onCreated }: IntakeDialogPr
     }]);
   }
 
+  function backToReport() {
+    if (phase === "saving") return;
+    setPhase("entry");
+    setAnalysis(null);
+    setTickets([]);
+    setActiveEvidence(null);
+    setError("");
+    setSampleChoice("");
+  }
+
   async function handleCommit() {
     if (!analysis) return;
     setPhase("saving");
@@ -179,6 +216,7 @@ function IntakeDialog({ open, aiConfigured, onClose, onCreated }: IntakeDialogPr
     try {
       const result = await commitAnalysis(analysis.analysisId, tickets);
       onCreated(result.tickets);
+      setCreatedCount(result.tickets.length);
       setPhase("success");
     } catch (commitError) {
       setError(errorMessage(commitError));
@@ -186,36 +224,48 @@ function IntakeDialog({ open, aiConfigured, onClose, onCreated }: IntakeDialogPr
     }
   }
 
+  const isEntry = phase === "entry" || phase === "analyzing";
+  const isReview = phase === "review" || phase === "saving";
+
   return <div className="dialog-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) resetAndClose(); }}>
     <section className="intake-dialog" role="dialog" aria-modal="true" aria-labelledby="intake-title">
       <header className="intake-header">
-        <div><span className="section-kicker">Contextual AI intake</span><h2 id="intake-title">Review the report before creating work orders</h2></div>
-        <button className="icon-button" type="button" aria-label="Close intake" onClick={resetAndClose}><Icon name="close" /></button>
+        <div><span className="section-kicker">Contextual AI intake</span><h2 id="intake-title">{isEntry ? "New Maintenance Report" : phase === "success" ? "Work orders created" : "Review & Create"}</h2><p className="intake-subtitle">{isEntry ? "Enter the tenant's concern to generate a work order." : phase === "success" ? "Your reviewed work is now in the maintenance queue." : "Check the extracted details before creating work orders."}</p></div>
+        <button className="icon-button" type="button" aria-label="Close intake" onClick={() => resetAndClose()}><Icon name="close" /></button>
       </header>
 
       <ol className="workflow-steps" aria-label="Intake progress">
-        {steps.map((step, index) => <li key={step} className={`${index === stepIndex ? "active" : ""} ${index < stepIndex ? "complete" : ""}`}><span>{index < stepIndex ? <Icon name="check" size={13} /> : index + 1}</span>{step}</li>)}
+        <li className={`${isEntry ? "active" : "complete"}`}><span>{isEntry ? "1" : <Icon name="check" size={13} />}</span>Report</li>
+        <li className={`${isReview ? "active" : phase === "success" ? "complete" : ""}`}><span>{phase === "success" ? <Icon name="check" size={13} /> : "2"}</span>Review &amp; Create</li>
       </ol>
 
       {error && <div className="inline-message error" role="alert"><Icon name="alert" size={16} />{error}</div>}
 
-      {phase === "success" ? <div className="intake-success"><span><Icon name="check" size={26} /></span><h3>Work orders created</h3><p>The reviewed tickets are now in the attention queue and ready for status management.</p><button className="primary-action" type="button" onClick={resetAndClose}>View work orders</button></div> :
-      <div className="intake-grid">
-        <section className="caller-panel">
-          <div className="panel-heading"><span><Icon name="clipboard" /></span><div><p>Original caller report</p><small>Source of truth</small></div></div>
-          {phase === "entry" || phase === "analyzing" ? <form onSubmit={handleAnalyze} className="report-form">
+      {phase === "success" ? <div className="intake-success"><span><Icon name="check" size={26} /></span><h3 ref={successHeadingRef} tabIndex={-1}>{createdCount} work order{createdCount === 1 ? "" : "s"} created</h3><p>The reviewed tickets are now in the attention queue and ready for status management.</p><button className="primary-action" type="button" onClick={() => { resetAndClose(true); onViewWorkOrders(); }}>View work orders <Icon name="chevron" size={16} /></button></div> : isEntry ?
+      <div className="entry-stage">
+        <section className="caller-panel entry-panel">
+          <div className="panel-heading"><span><Icon name="clipboard" /></span><div><p>Caller report</p><small>Keep the tenant's words intact</small></div></div>
+          <form onSubmit={handleAnalyze} className="report-form">
             <label htmlFor="caller-report">Caller report</label>
-            <textarea ref={textareaRef} id="caller-report" value={report} maxLength={2000} onChange={(event) => setReport(event.target.value)} placeholder="Paste or type the report exactly as received..." disabled={phase === "analyzing"} />
+            <textarea ref={textareaRef} id="caller-report" value={report} maxLength={2000} onChange={(event) => { setReport(event.target.value); setSampleChoice(""); }} onKeyDown={(event) => { if ((event.ctrlKey || event.metaKey) && event.key === "Enter") { event.preventDefault(); void submitAnalysis(); } }} placeholder="Paste or type the report exactly as received..." disabled={phase === "analyzing"} />
             <div className="field-meta"><span>Do not summarize before analysis</span><span>{report.length}/2000</span></div>
-            {aiConfigured === false && <p className="configuration-warning">Add <code>OPENAI_API_KEY</code> to <code>.env</code> and restart the server.</p>}
-            <button className="primary-action" disabled={phase === "analyzing" || aiConfigured === false}>{phase === "analyzing" ? <><span className="button-spinner" />Analyzing report</> : <><Icon name="spark" />Analyze with AI</>}</button>
-            <div className="sample-reports"><p>Client test reports</p><div>{sampleReports.map((sample, index) => <button key={sample.label} type="button" onClick={() => setReport(sample.text)}><span>{index + 1}</span>{sample.label}</button>)}</div></div>
-          </form> : <div className="report-source" aria-live="polite"><p><HighlightedReport report={analysis?.originalReport || report} evidence={activeEvidence} /></p>{activeEvidence && <button type="button" onClick={() => setActiveEvidence(null)}>Clear source highlight</button>}</div>}
+            {aiConfigured === false && <p className="configuration-warning"><Icon name="alert" size={14} />AI analysis is currently unavailable. Please contact the system administrator.</p>}
+            {phase === "analyzing" && <p className="processing-note" role="status"><span className="button-spinner dark" />Analyzing the actual report. Your text is preserved.</p>}
+            <button className="primary-action" disabled={phase === "analyzing" || aiConfigured === false}>{phase === "analyzing" ? <><span className="button-spinner" />Analyzing report</> : <><Icon name="spark" />Analyze report</>}</button>
+            <label className="sample-select"><span>Try a client sample</span><select aria-label="Try a client sample report" value={sampleChoice} onChange={(event) => { const sample = sampleReports[Number(event.target.value)]; if (!sample) return; setSampleChoice(event.target.value); setReport(sample.text); setError(""); }}><option value="">Choose a sample report</option>{sampleReports.map((sample, index) => <option key={sample.label} value={index}>{sample.label}</option>)}</select></label>
+            <p className="keyboard-hint"><kbd>Ctrl</kbd><span>or</span><kbd>⌘</kbd><span>+</span><kbd>Enter</kbd> to analyze</p>
+          </form>
+        </section>
+      </div> :
+      <div className="review-stage">
+        <section className="caller-panel report-panel">
+          <div className="panel-heading"><span><Icon name="clipboard" /></span><div><p>Original caller report</p><small>Source of truth</small></div></div>
+          <div className="report-source" aria-live="polite"><p><HighlightedReport report={analysis?.originalReport || report} evidence={activeEvidence} /></p>{activeEvidence && <button type="button" onClick={() => setActiveEvidence(null)}>Clear source highlight</button>}</div>
         </section>
 
         <section className="extraction-panel">
-          <div className="panel-heading"><span className="ai-mark"><Icon name="spark" /></span><div><p>Structured extraction</p><small>{phase === "review" || phase === "saving" ? `${tickets.length} issue${tickets.length === 1 ? "" : "s"} detected` : "Awaiting analysis"}</small></div></div>
-          {phase === "entry" || phase === "analyzing" ? <div className="extraction-placeholder"><Icon name="spark" size={24} /><h3>{phase === "analyzing" ? "Analyzing the actual report" : "Extraction appears here"}</h3><p>{phase === "analyzing" ? "The next screen will reflect the real API response." : "The AI will separate issues, preserve missing details, and flag safety risks for review."}</p></div> : <div className="review-content">
+          <div className="panel-heading"><span className="ai-mark"><Icon name="spark" /></span><div><h3 ref={reviewHeadingRef} tabIndex={-1}>Extracted work orders</h3><small>{tickets.length} issue{tickets.length === 1 ? "" : "s"} detected · linked to this report</small></div></div>
+          <div className="review-content">
             {tickets.some((ticket) => ticket.priority === "Emergency") && <div className="emergency-banner"><Icon name="alert" /><div><strong>Immediate safety risk detected</strong><span>Emergency priority will be enforced again when the review is saved.</span></div></div>}
             <div className="review-list">
               {tickets.map((ticket, index) => <article className="review-card" key={`${index}-${ticket.issue_type}`}>
@@ -230,11 +280,11 @@ function IntakeDialog({ open, aiConfigured, onClose, onCreated }: IntakeDialogPr
               </article>)}
             </div>
             <button className="add-issue-button" type="button" onClick={addIssue}><Icon name="plus" size={15} />Add missed issue</button>
-          </div>}
+          </div>
         </section>
       </div>}
 
-      {(phase === "review" || phase === "saving") && <footer className="intake-footer"><p><Icon name="edit" size={15} />Review every field. Tickets are not in the database yet.</p><div><button className="secondary-action" type="button" onClick={() => setPhase("entry")} disabled={phase === "saving"}>Start over</button><button className="primary-action" type="button" onClick={() => void handleCommit()} disabled={phase === "saving"}>{phase === "saving" ? <><span className="button-spinner" />Saving work orders</> : <>Create {tickets.length} work order{tickets.length === 1 ? "" : "s"}<Icon name="chevron" size={16} /></>}</button></div></footer>}
+      {isReview && <footer className="intake-footer"><p><Icon name="edit" size={15} />Review every field. Tickets are not in the database yet.</p><div><button className="secondary-action" type="button" onClick={backToReport} disabled={phase === "saving"}>Back to report</button><button className="primary-action" type="button" onClick={() => void handleCommit()} disabled={phase === "saving" || tickets.length === 0}>{phase === "saving" ? <><span className="button-spinner" />Saving work orders</> : <>{tickets.length === 1 ? "Create Work Order" : "Create Work Orders"}<Icon name="chevron" size={16} /></>}</button></div></footer>}
     </section>
   </div>;
 }
@@ -339,7 +389,7 @@ export default function App() {
     <header className="app-header">
       <a className="brand" href="#workspace" aria-label="Maintenance Desk workspace"><span className="brand-mark"><Icon name="building" size={19} /></span><span><strong>Maintenance Desk</strong><small>The living workspace</small></span></a>
       <nav aria-label="Primary navigation"><button type="button" className="nav-link active" onClick={() => queueRef.current?.scrollIntoView({ behavior: "smooth" })}><Icon name="home" size={16} />Workspace</button></nav>
-      <div className="header-actions"><label className="global-search"><Icon name="search" size={16} /><span className="sr-only">Search work orders</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search work orders" /></label><span className={`ai-status ${aiConfigured ? "ready" : ""}`} title={aiConfigured ? "OpenAI extraction is configured" : "OpenAI API key is required"}><i />{aiConfigured ? "AI ready" : "AI setup needed"}</span><button className="new-report-button" type="button" onClick={() => setIntakeOpen(true)}><Icon name="plus" size={16} />New report</button></div>
+      <div className="header-actions"><label className="global-search"><Icon name="search" size={16} /><span className="sr-only">Search work orders</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search work orders" /></label><span className={`ai-status ${aiConfigured ? "ready" : ""}`} title={aiConfigured === true ? "AI extraction is ready" : aiConfigured === false ? "AI analysis is currently unavailable" : "Checking AI availability"}><i />{aiConfigured === true ? "AI ready" : aiConfigured === false ? "AI unavailable" : "Checking AI"}</span><button className="new-report-button" type="button" onClick={() => setIntakeOpen(true)}><Icon name="plus" size={16} />New report</button></div>
     </header>
 
     <main id="workspace" className="workspace">
@@ -363,6 +413,6 @@ export default function App() {
       </section>
     </main>
 
-    <IntakeDialog open={intakeOpen} aiConfigured={aiConfigured} onClose={() => setIntakeOpen(false)} onCreated={handleCreated} />
+    <IntakeDialog open={intakeOpen} aiConfigured={aiConfigured} onClose={() => setIntakeOpen(false)} onCreated={handleCreated} onViewWorkOrders={() => queueRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })} />
   </div>;
 }
