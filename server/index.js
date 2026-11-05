@@ -7,9 +7,7 @@ const app = createApp({ database });
 
 const server = app.listen(config.port, () => {
   console.log(`Maintenance dashboard API running on http://localhost:${config.port}`);
-  console.log(
-    `AI mode: ${config.aiMode}${config.openaiApiKey ? " (API key configured)" : ""}`,
-  );
+  console.log(`OpenAI extraction: ${config.openaiApiKey ? "configured" : "not configured"}`);
 });
 
 async function shutdown() {

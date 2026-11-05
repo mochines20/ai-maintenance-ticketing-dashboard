@@ -8,8 +8,10 @@
     "dev:server": "node --watch server/index.js",
     "dev:client": "vite --config client/vite.config.js",
     "build": "vite build --config client/vite.config.js",
+    "typecheck": "tsc --noEmit -p client/tsconfig.json",
     "start": "node server/index.js",
-    "test": "vitest run --config vitest.config.js"
+    "test": "vitest run --config vitest.config.js",
+    "test:live-ai": "vitest run --config vitest.config.js server/services/extractor.integration.test.js"
   },
   "dependencies": {
     "cors": "^2.8.5",
@@ -23,8 +25,12 @@
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^5.1.0",
+    "@types/node": "^24.10.0",
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.2",
     "concurrently": "^9.2.1",
     "supertest": "^7.1.4",
+    "typescript": "^5.9.3",
     "vite": "^7.2.2",
     "vitest": "^4.0.8"
   }

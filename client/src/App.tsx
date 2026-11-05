@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
-import { getTickets, submitReport, updateTicketStatus } from "./api.js";
+import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { getHealth, getTickets, submitReport, updateTicketStatus } from "./api";
+import type { Priority, Ticket, TicketStatus } from "./types";
 
 const sampleReports = [
   {
@@ -22,13 +23,20 @@ const sampleReports = [
     label: "Window repair",
     text: "This is 2D. My bedroom window won't close all the way. Not urgent, whenever you get a chance.",
   },
-];
+] as const;
 
-const statusOptions = ["New", "In Progress", "Done"];
-const priorityOrder = { Emergency: 0, High: 1, Medium: 2, Low: 3 };
+const statusOptions: TicketStatus[] = ["New", "In Progress", "Done"];
+const priorityOrder: Record<Priority, number> = {
+  Emergency: 0,
+  High: 1,
+  Medium: 2,
+  Low: 3,
+};
 
-function Icon({ name, size = 20 }) {
-  const paths = {
+type IconName = "logo" | "plus" | "spark" | "alert" | "clock" | "check" | "filter" | "search" | "map";
+
+function Icon({ name, size = 20 }: { name: IconName; size?: number }) {
+  const paths: Record<IconName, ReactNode> = {
     logo: <><path d="M4 13.5 12 5l8 8.5"/><path d="M6.5 11.5V21h11v-9.5"/><path d="M9.5 21v-6h5v6"/><path d="m16.8 4.2 3 3"/></>,
     plus: <><path d="M12 5v14M5 12h14"/></>,
     spark: <><path d="m12 3-1.4 4.1a5 5 0 0 1-3.2 3.2L3 12l4.4 1.7a5 5 0 0 1 3.2 3.2L12 21l1.4-4.1a5 5 0 0 1 3.2-3.2L21 12l-4.4-1.7a5 5 0 0 1-3.2-3.2L12 3Z"/></>,
@@ -46,20 +54,30 @@ function Icon({ name, size = 20 }) {
   );
 }
 
-function StatCard({ label, value, detail, tone, icon }) {
+interface StatCardProps {
+  label: string;
+  value: number;
+  detail: string;
+  tone?: string;
+  icon: IconName;
+}
+
+function StatCard({ label, value, detail, tone = "", icon }: StatCardProps) {
   return (
-    <article className={`stat-card ${tone || ""}`}>
+    <article className={`stat-card ${tone}`}>
       <div className="stat-icon"><Icon name={icon} /></div>
-      <div>
-        <p>{label}</p>
-        <strong>{value}</strong>
-        <span>{detail}</span>
-      </div>
+      <div><p>{label}</p><strong>{value}</strong><span>{detail}</span></div>
     </article>
   );
 }
 
-function TicketCard({ ticket, onStatusChange, updating }) {
+interface TicketCardProps {
+  ticket: Ticket;
+  onStatusChange: (id: number, status: TicketStatus) => Promise<void>;
+  updating: boolean;
+}
+
+function TicketCard({ ticket, onStatusChange, updating }: TicketCardProps) {
   const created = new Intl.DateTimeFormat("en", {
     month: "short",
     day: "numeric",
@@ -75,9 +93,7 @@ function TicketCard({ ticket, onStatusChange, updating }) {
           {ticket.priority === "Emergency" && <Icon name="alert" size={14} />}
           {ticket.priority}
         </span>
-        {ticket.missing_information && (
-          <span className="follow-up-badge">Needs follow-up</span>
-        )}
+        {ticket.missing_information && <span className="follow-up-badge">Needs follow-up</span>}
         <time>{created}</time>
       </div>
       <div className="ticket-body">
@@ -87,12 +103,10 @@ function TicketCard({ ticket, onStatusChange, updating }) {
           <div className="ticket-meta">
             <span><Icon name="map" size={15} /> {ticket.unit_number || "Unit not provided"}</span>
             <span>Report #{ticket.report_id}</span>
-            <span className={`mode-dot ${ticket.processing_mode}`}>{ticket.processing_mode === "openai" ? "AI extracted" : "Demo parser"}</span>
+            <span className="mode-dot openai">AI extracted</span>
           </div>
           {ticket.missing_information && (
-            <p className="missing-note">
-              Missing: {ticket.missing_fields.join(", ").replaceAll("_", " ")}
-            </p>
+            <p className="missing-note">Missing: {ticket.missing_fields.join(", ").replaceAll("_", " ")}</p>
           )}
         </div>
         <label className="status-control">
@@ -100,7 +114,7 @@ function TicketCard({ ticket, onStatusChange, updating }) {
           <select
             value={ticket.status}
             disabled={updating}
-            onChange={(event) => onStatusChange(ticket.id, event.target.value)}
+            onChange={(event) => void onStatusChange(ticket.id, event.target.value as TicketStatus)}
           >
             {statusOptions.map((status) => <option key={status}>{status}</option>)}
           </select>
@@ -110,15 +124,20 @@ function TicketCard({ ticket, onStatusChange, updating }) {
   );
 }
 
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : "An unexpected error occurred.";
+}
+
 export default function App() {
-  const [tickets, setTickets] = useState([]);
+  const [tickets, setTickets] = useState<Ticket[]>([]);
   const [report, setReport] = useState("");
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [updatingId, setUpdatingId] = useState(null);
+  const [updatingId, setUpdatingId] = useState<number | null>(null);
+  const [aiConfigured, setAiConfigured] = useState<boolean | null>(null);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const [statusFilter, setStatusFilter] = useState("All");
+  const [statusFilter, setStatusFilter] = useState<TicketStatus | "All">("All");
   const [query, setQuery] = useState("");
 
   async function loadTickets() {
@@ -127,14 +146,17 @@ export default function App() {
       setTickets(data.tickets);
       setError("");
     } catch (loadError) {
-      setError(loadError.message);
+      setError(errorMessage(loadError));
     } finally {
       setLoading(false);
     }
   }
 
   useEffect(() => {
-    loadTickets();
+    void loadTickets();
+    getHealth()
+      .then((health) => setAiConfigured(health.ai.configured))
+      .catch((healthError: unknown) => setError(errorMessage(healthError)));
   }, []);
 
   const stats = useMemo(() => ({
@@ -146,14 +168,11 @@ export default function App() {
 
   const visibleTickets = useMemo(() => tickets
     .filter((ticket) => statusFilter === "All" || ticket.status === statusFilter)
-    .filter((ticket) => {
-      const haystack = `${ticket.description} ${ticket.issue_type} ${ticket.unit_number || ""}`.toLowerCase();
-      return haystack.includes(query.toLowerCase());
-    })
+    .filter((ticket) => `${ticket.description} ${ticket.issue_type} ${ticket.unit_number || ""}`.toLowerCase().includes(query.toLowerCase()))
     .sort((a, b) => priorityOrder[a.priority] - priorityOrder[b.priority]),
   [tickets, statusFilter, query]);
 
-  async function handleSubmit(event) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (report.trim().length < 10) {
       setError("Please enter a complete maintenance report.");
@@ -165,23 +184,23 @@ export default function App() {
     try {
       const result = await submitReport(report);
       setReport("");
-      setNotice(`${result.tickets.length} work order${result.tickets.length > 1 ? "s" : ""} created using ${result.processingMode === "openai" ? "AI extraction" : "the demo parser"}.`);
+      setNotice(`${result.tickets.length} AI-extracted work order${result.tickets.length > 1 ? "s" : ""} created.`);
       await loadTickets();
     } catch (submitError) {
-      setError(submitError.message);
+      setError(errorMessage(submitError));
     } finally {
       setSubmitting(false);
     }
   }
 
-  async function handleStatusChange(id, status) {
+  async function handleStatusChange(id: number, status: TicketStatus) {
     setUpdatingId(id);
     setError("");
     try {
       const { ticket } = await updateTicketStatus(id, status);
       setTickets((current) => current.map((item) => item.id === id ? ticket : item));
     } catch (updateError) {
-      setError(updateError.message);
+      setError(errorMessage(updateError));
     } finally {
       setUpdatingId(null);
     }
@@ -194,7 +213,9 @@ export default function App() {
           <div className="brand-mark"><Icon name="logo" size={24} /></div>
           <div><strong>MaintainIQ</strong><span>Property Operations</span></div>
         </div>
-        <div className="system-status"><span /> Intake system online</div>
+        <div className={`system-status ${aiConfigured === false ? "offline" : ""}`}>
+          <span /> {aiConfigured === false ? "API key required" : "AI intake online"}
+        </div>
       </header>
 
       <main>
@@ -221,7 +242,12 @@ export default function App() {
               <div><p>New request</p><h2>AI maintenance intake</h2></div>
             </div>
             <p className="section-copy">Paste a caller transcript or type the tenant's report exactly as received.</p>
-            <form onSubmit={handleSubmit}>
+            {aiConfigured === false && (
+              <div className="config-note" role="status">
+                Add <code>OPENAI_API_KEY</code> to <code>.env</code> and restart the server to enable extraction.
+              </div>
+            )}
+            <form onSubmit={(event) => void handleSubmit(event)}>
               <label htmlFor="report">Tenant report</label>
               <textarea
                 id="report"
@@ -231,7 +257,7 @@ export default function App() {
                 placeholder="Example: Hi, this is apartment 4B. Water is leaking from the ceiling..."
               />
               <div className="textarea-footer"><span>Unstructured text accepted</span><span>{report.length}/2000</span></div>
-              <button className="primary-button" disabled={submitting}>
+              <button className="primary-button" disabled={submitting || aiConfigured === false}>
                 <Icon name="spark" size={18} />
                 {submitting ? "Analyzing report..." : "Create work order"}
               </button>
@@ -252,8 +278,8 @@ export default function App() {
             <div className="queue-header">
               <div><p className="eyebrow">Operations queue</p><h2>Work orders</h2></div>
               <div className="queue-tools">
-                <label className="search-box"><Icon name="search" size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search tickets" /></label>
-                <label className="filter-box"><Icon name="filter" size={17} /><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option>All</option>{statusOptions.map((status) => <option key={status}>{status}</option>)}</select></label>
+                <label className="search-box"><Icon name="search" size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search tickets" aria-label="Search tickets" /></label>
+                <label className="filter-box"><Icon name="filter" size={17} /><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as TicketStatus | "All")} aria-label="Filter by status"><option>All</option>{statusOptions.map((status) => <option key={status}>{status}</option>)}</select></label>
               </div>
             </div>
 
@@ -276,4 +302,3 @@ export default function App() {
     </div>
   );
 }
-

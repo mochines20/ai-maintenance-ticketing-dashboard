@@ -13,7 +13,6 @@ export const config = {
     projectRoot,
     process.env.DATABASE_PATH || "./data/maintenance.sqlite",
   ),
-  aiMode: (process.env.AI_MODE || "auto").toLowerCase(),
   openaiApiKey: process.env.OPENAI_API_KEY || "",
   openaiModel: process.env.OPENAI_MODEL || "gpt-4o-mini",
 };

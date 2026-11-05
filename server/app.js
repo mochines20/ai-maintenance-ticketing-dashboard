@@ -2,13 +2,17 @@ import path from "node:path";
 import express from "express";
 import cors from "cors";
 import { ZodError } from "zod";
-import { projectRoot } from "./config.js";
+import { config, projectRoot } from "./config.js";
 import {
   extractionResultSchema,
   reportRequestSchema,
   statusRequestSchema,
 } from "./schemas.js";
-import { extractReport } from "./services/extractor.js";
+import {
+  extractReport,
+  LlmConfigurationError,
+  LlmProviderError,
+} from "./services/extractor.js";
 import { applySafetyRules } from "./services/safety-rules.js";
 
 export function createApp({ database, extractor = extractReport }) {
@@ -18,7 +22,14 @@ export function createApp({ database, extractor = extractReport }) {
   app.use(express.json({ limit: "32kb" }));
 
   app.get("/api/health", (_request, response) => {
-    response.json({ status: "ok" });
+    response.json({
+      status: "ok",
+      ai: {
+        configured: Boolean(config.openaiApiKey),
+        provider: "openai",
+        model: config.openaiModel,
+      },
+    });
   });
 
   app.get("/api/tickets", (_request, response) => {
@@ -73,6 +84,21 @@ export function createApp({ database, extractor = extractReport }) {
   });
 
   app.use((error, _request, response, _next) => {
+    if (error instanceof LlmConfigurationError) {
+      return response.status(503).json({
+        error: "AI extraction is not configured. Add OPENAI_API_KEY to .env and restart the server.",
+        code: error.code,
+      });
+    }
+
+    if (error instanceof LlmProviderError) {
+      console.error(error.cause || error);
+      return response.status(502).json({
+        error: "The AI provider could not extract this report. Please try again.",
+        code: error.code,
+      });
+    }
+
     if (error instanceof ZodError) {
       return response.status(400).json({
         error: "Validation failed.",
