@@ -2,6 +2,7 @@ node_modules/
 client/dist/
 data/*.sqlite
 data/*.sqlite-*
+data/*.bak
 .env
 .env.local
 coverage/

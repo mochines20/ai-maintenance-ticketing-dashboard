@@ -92,6 +92,43 @@ describe("maintenance ticket API", () => {
       .get("/api/dashboard/summary")
       .expect(200);
     expect(summaryAfterDone.body.summary.completedWorkOrders).toBe(1);
+
+    const reopened = await request(app)
+      .patch(`/api/tickets/${created.body.tickets[0].id}/status`)
+      .send({ status: "In Progress" })
+      .expect(200);
+    expect(reopened.body.ticket.status).toBe("In Progress");
+    const summaryAfterReopen = await request(app)
+      .get("/api/dashboard/summary")
+      .expect(200);
+    expect(summaryAfterReopen.body.summary).toMatchObject({
+      openWorkOrders: 1,
+      completedWorkOrders: 0,
+    });
+  });
+
+  it("persists a human-reviewed correction without changing the original report", async () => {
+    const analyzed = await request(app)
+      .post("/api/intake/analyze")
+      .send({ report: "This is unit 2D. The bedroom window will not close all the way." })
+      .expect(200);
+
+    const reviewedTickets = analyzed.body.tickets.map((ticket) => ({
+      ...ticket,
+      unit_number: "3B",
+    }));
+    const created = await request(app)
+      .post(`/api/intake/${analyzed.body.analysisId}/commit`)
+      .send({ tickets: reviewedTickets })
+      .expect(201);
+
+    expect(created.body.tickets[0].unit_number).toBe("3B");
+
+    const refreshed = await request(app)
+      .get(`/api/tickets/${created.body.tickets[0].id}`)
+      .expect(200);
+    expect(refreshed.body.ticket.unit_number).toBe("3B");
+    expect(refreshed.body.ticket.original_text).toContain("unit 2D");
   });
 
   it("rejects reports that are too short", async () => {

@@ -20,7 +20,7 @@ The review token is consumed after a successful commit, so repeating the same co
 
 ## Workspace design
 
-The interface is intentionally a work surface rather than a decorative dashboard: warm neutral background, low-saturation semantic color, readable operational type, a four-card summary, an emergency-first FIFO queue, and a persistent ticket inspector. Intake now uses two user-facing stages—`Report` and `Review & Create`. The initial modal is compact and contains only the caller report, sample selector, validation feedback, and Analyze action. After analysis it expands into a two-panel review workspace so the original words and structured extraction remain visible together. Motion is limited to short state transitions and respects `prefers-reduced-motion`.
+The interface is intentionally a work surface rather than a decorative dashboard: warm neutral background, low-saturation semantic color, readable operational type, a four-card summary, an emergency-first FIFO queue, and a persistent ticket inspector. The queue defaults to active `New`/`In Progress` work orders; completed records remain accessible through the `All` and `Done` filters. Intake now uses two user-facing stages—`Report` and `Review & Create`. The initial modal is compact and contains only the caller report, sample selector, validation feedback, and Analyze action. After analysis it expands into a two-panel review workspace so the original words and structured extraction remain visible together. Motion is limited to short state transitions and respects `prefers-reduced-motion`.
 
 The queue layout is content-driven. The previous `480px` minimum heights on the table wrapper and inspector, plus the `420px` empty-state minimum, caused a single ticket to leave a large blank region. Those forced heights are removed; the empty state uses a compact minimum, and larger queues are paginated in five-ticket batches with Previous/Next controls. A failed queue request is shown as an error state with a Retry action instead of a false zero-ticket state.
 
@@ -72,7 +72,7 @@ Results:
 
 - TypeScript type check passed.
 - Production build passed.
-- 16 automated tests passed across four test files.
+- 17 automated tests passed across four test files.
 - Five controlled pipeline tests covered all client reports.
 - The API/database/status/safety-rule and source-evidence tests passed.
 - The dashboard and compact two-stage intake were visually inspected in desktop and mobile layouts.

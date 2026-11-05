@@ -15,6 +15,7 @@ A full-stack prototype that turns unstructured caller reports into reviewable ma
 - Deterministic emergency escalation for possible gas leaks, fire or sparking, and water contacting electrical equipment
 - Persistent SQLite file with timestamps and default `New` status
 - Search, status filters, priority indicators, follow-up badges, and status updates
+- Actionable queue defaults to active work orders; completed records remain available through `All` and `Done`
 - Emergency-first work queue with FIFO ordering for all remaining requests
 - Content-driven queue and inspector sizing, with five-ticket pagination for larger queues
 - Automated API, persistence, safety-rule, and five-report contract tests
@@ -172,7 +173,7 @@ The live suite is opt-in so ordinary `npm test` never spends provider quota. It 
 
 The response contains an `analysisId`, the untouched original report, and one or more editable ticket candidates. It does not persist anything.
 
-The workspace layout is content-aware: the queue and inspector no longer reserve a fixed 480px height. Empty and small queues stay compact, while larger queues are presented five tickets at a time with Previous/Next pagination.
+The workspace layout is content-aware: the queue and inspector no longer reserve a fixed 480px height. Empty and small queues stay compact, while larger queues are presented five tickets at a time with Previous/Next pagination. The default queue filter is `Open` so the workspace starts with actionable work; `All` and `Done` preserve access to completed history.
 
 ### Commit reviewed work orders
 
@@ -228,7 +229,7 @@ Executed on November 6, 2026:
 | TypeScript type check | Passed |
 | Production Vite build | Passed |
 | Automated test files | 4 passed, 1 skipped |
-| Automated test cases | 16 passed, 1 skipped |
+| Automated test cases | 17 passed, 1 skipped |
 | Five-report controlled pipeline suite | 5 passed |
 | Live Groq provider smoke check | Passed with a synthetic non-tenant report; full five client reports were not sent to an external provider |
 | Missing-key API behavior | Verified `503 LLM_NOT_CONFIGURED` |
