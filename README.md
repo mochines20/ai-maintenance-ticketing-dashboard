@@ -6,7 +6,7 @@ A full-stack prototype that turns unstructured caller reports into reviewable ma
 
 - React, Vite, and TypeScript frontend
 - Node.js and Express REST API
-- Gemini Generate Content API with JSON-schema structured responses (OpenAI remains supported as an optional provider)
+- Groq structured outputs through the OpenAI-compatible API (Gemini and OpenAI remain supported as optional providers)
 - Zod validation at the request and LLM-output boundaries
 - Two-stage intake: AI analysis first, explicit human review and commit second
 - Verbatim source-evidence links that are rejected unless they occur in the original report
@@ -29,7 +29,7 @@ React + TypeScript intake
 Express request validation
          |
          v
-Gemini / OpenAI structured output
+Groq / Gemini / OpenAI structured output
          |
          v
 Zod output + verbatim-evidence validation
@@ -61,7 +61,7 @@ AI analysis is a processing state inside the first stage, not a separate wizard 
 - npm
 - An API key for the configured AI provider
 
-The provider is selected with `AI_PROVIDER=gemini` or `AI_PROVIDER=openai`. Gemini defaults to `gemini-2.5-flash`; OpenAI defaults to `gpt-4o-mini`.
+The provider is selected with `AI_PROVIDER=groq`, `AI_PROVIDER=gemini`, or `AI_PROVIDER=openai`. Groq defaults to `openai/gpt-oss-120b`; Gemini defaults to `gemini-2.5-flash`; OpenAI defaults to `gpt-4o-mini`.
 
 ## Installation
 
@@ -90,8 +90,12 @@ Add the real API key to `.env`:
 ```env
 PORT=3001
 DATABASE_PATH=./data/maintenance.sqlite
-AI_PROVIDER=gemini
-GEMINI_API_KEY=your_gemini_key_here
+AI_PROVIDER=groq
+GROQ_API_KEY=your_groq_key_here
+GROQ_MODEL=openai/gpt-oss-120b
+
+# Optional Gemini provider
+GEMINI_API_KEY=
 GEMINI_MODEL=gemini-2.5-flash
 
 # Optional OpenAI alternative
@@ -148,8 +152,8 @@ The live suite is opt-in so ordinary `npm test` never spends provider quota. It 
   "status": "ok",
   "ai": {
     "configured": true,
-    "provider": "gemini",
-    "model": "gemini-2.5-flash"
+    "provider": "groq",
+    "model": "openai/gpt-oss-120b"
   }
 }
 ```
@@ -222,12 +226,12 @@ Executed on November 6, 2026:
 | Automated test files | 4 passed, 1 skipped |
 | Automated test cases | 15 passed, 1 skipped |
 | Five-report controlled pipeline suite | 5 passed |
-| Live Gemini provider check | One real extraction passed; remaining five-report calls were blocked by the supplied key's Gemini free-tier quota |
+| Live Groq provider smoke check | Passed with a synthetic non-tenant report; full five client reports were not sent to an external provider |
 | Missing-key API behavior | Verified `503 LLM_NOT_CONFIGURED` |
 | Responsive UI review | Passed on desktop and mobile layouts; compact intake and review workspace checked after refinement |
 | Keyboard and interaction QA | Sample selector, Ctrl/Cmd+Enter hint, safe Escape behavior, focus transition, and no browser console errors verified |
 
-The five controlled tests exercise API validation, safety escalation, multiple-ticket persistence, missing-information handling, and default status using an injected test double. They do not claim to measure model quality. The separate live suite is the authoritative LLM test. This implementation made a real Gemini call successfully, but the supplied key then reached its free-tier request quota before all five live scenarios could complete.
+The five controlled tests exercise API validation, safety escalation, multiple-ticket persistence, missing-information handling, and default status using an injected test double. They do not claim to measure model quality. A real Groq smoke request and localhost analyze request both completed with `processingMode: "groq"` using a synthetic report. The five client reports were intentionally not sent to an external provider because they contain tenant/unit details.
 
 See [WALKTHROUGH.md](./WALKTHROUGH.md) for the written walkthrough and submission checklist.
 

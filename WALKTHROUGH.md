@@ -2,13 +2,13 @@
 
 ## What the prototype does
 
-The application accepts a caller or tenant maintenance report, sends it to the configured Gemini or OpenAI provider for structured extraction, and presents the result beside the original report for human review. The reviewer can correct fields, add a missed issue, remove an extra issue, and inspect the exact source phrase behind an extracted value. Only an explicit commit writes one or more linked work orders to SQLite. The workspace then shows priority, follow-up state, unit number, timestamps, original context, and editable status.
+The application accepts a caller or tenant maintenance report, sends it to the configured Groq, Gemini, or OpenAI provider for structured extraction, and presents the result beside the original report for human review. The reviewer can correct fields, add a missed issue, remove an extra issue, and inspect the exact source phrase behind an extracted value. Only an explicit commit writes one or more linked work orders to SQLite. The workspace then shows priority, follow-up state, unit number, timestamps, original context, and editable status.
 
 ## Request flow
 
 1. The React and TypeScript intake sends the report to `POST /api/intake/analyze`.
 2. Zod validates and sanitizes the input.
-3. The backend calls Gemini Generate Content (or the optional OpenAI Responses provider) using a JSON-schema structured response.
+3. The backend calls Groq Chat Completions with strict JSON-schema structured output (Gemini Generate Content and OpenAI Responses remain optional providers).
 4. Zod validates the model result independently of the provider schema, and claimed evidence is kept only when it appears verbatim in the report.
 5. Safety rules escalate possible gas leaks and dangerous electrical conditions.
 6. The analysis is held in a 15-minute in-memory review session; SQLite remains unchanged.
@@ -76,11 +76,12 @@ Results:
 - The dashboard and compact two-stage intake were visually inspected in desktop and mobile layouts.
 - Sample selection, report preservation on Escape, the reduced two-stage indicator, normal-user AI-unavailable messaging, and browser console output were checked in the live local preview.
 - The missing-key path remains covered and returns `503 LLM_NOT_CONFIGURED` when the selected provider has no key.
-- The supplied Gemini key produced one real structured extraction before Google rejected further calls for free-tier quota exhaustion.
+- The previous Gemini key produced one real structured extraction before Google rejected further calls for free-tier quota exhaustion; Groq is now the active local provider.
+- A real Groq smoke extraction and localhost analyze request completed with a synthetic, non-tenant report.
 
 ## Verification not performed
 
-The Gemini key was available locally, and the live integration suite exists at `server/services/extractor.integration.test.js`. One real Gemini extraction completed successfully. The remaining four scenarios could not run because Google returned the free-tier daily quota error for the supplied key. No model output is fabricated or presented as a full five-report pass.
+The live integration suite exists at `server/services/extractor.integration.test.js`. The active provider is now Groq, configured through the server-only `GROQ_API_KEY`. The five client reports were not sent to Groq because they contain tenant/unit details; only the synthetic smoke request was run against the external provider.
 
 After adding a key, run:
 
@@ -95,7 +96,7 @@ Record the resulting five outputs and update this walkthrough before final submi
 - [x] React, Vite, and TypeScript frontend
 - [x] Node.js and Express backend
 - [x] Persistent SQLite database
-- [x] Real Gemini structured-output integration (OpenAI remains an optional provider)
+- [x] Real Groq structured-output integration (Gemini and OpenAI remain optional providers)
 - [x] Zod request and LLM-output validation
 - [x] Multiple linked tickets
 - [x] Missing-information handling
@@ -107,8 +108,8 @@ Record the resulting five outputs and update this walkthrough before final submi
 - [x] Conditional live tests for all five client reports
 - [x] README and `.env.example`
 - [x] No secrets or runtime database committed
-- [x] Add a real `GEMINI_API_KEY` locally without committing it
-- [ ] Re-run `npm run test:live-ai` after the Gemini quota resets or billing is enabled
+- [x] Add a real `GROQ_API_KEY` locally without committing it
+- [ ] Run `npm run test:live-ai` with the active Groq provider after explicitly approving external submission of the five client reports
 - [ ] Record all five live model outputs
 - [ ] Record a Loom video or use this written walkthrough
 - [ ] Email the public repository link to the recruiter

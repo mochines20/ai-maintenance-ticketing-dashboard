@@ -13,10 +13,13 @@ export const config = {
     projectRoot,
     process.env.DATABASE_PATH || "./data/maintenance.sqlite",
   ),
-  aiProvider: process.env.AI_PROVIDER || (process.env.GEMINI_API_KEY ? "gemini" : "openai"),
+  aiProvider: process.env.AI_PROVIDER
+    || (process.env.GROQ_API_KEY ? "groq" : process.env.GEMINI_API_KEY ? "gemini" : "openai"),
   openaiApiKey: process.env.OPENAI_API_KEY || "",
   openaiModel: process.env.OPENAI_MODEL || "gpt-4o-mini",
   geminiApiKey: process.env.GEMINI_API_KEY || "",
   geminiModel: process.env.GEMINI_MODEL || "gemini-2.5-flash",
+  groqApiKey: process.env.GROQ_API_KEY || "",
+  groqModel: process.env.GROQ_MODEL || "openai/gpt-oss-120b",
 };
 

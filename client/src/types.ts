@@ -1,6 +1,6 @@
 export type Priority = "Low" | "Medium" | "High" | "Emergency";
 export type TicketStatus = "New" | "In Progress" | "Done";
-export type AiProvider = "openai" | "gemini";
+export type AiProvider = "openai" | "gemini" | "groq";
 export type IssueType = "Plumbing" | "Electrical" | "HVAC" | "Gas/Safety" | "Structural" | "Appliance" | "General" | "Other";
 
 export interface SourceEvidence {

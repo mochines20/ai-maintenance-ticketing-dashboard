@@ -6,7 +6,9 @@ import { applySafetyRules } from "./safety-rules.js";
 
 const liveConfigured = process.env.RUN_LIVE_AI === "1" && (config.aiProvider === "gemini"
   ? Boolean(config.geminiApiKey)
-  : Boolean(config.openaiApiKey));
+  : config.aiProvider === "groq"
+    ? Boolean(config.groqApiKey)
+    : Boolean(config.openaiApiKey));
 
 describe.skipIf(!liveConfigured)(`live ${config.aiProvider} extraction`, () => {
   it("extracts all five client reports sequentially", async () => {

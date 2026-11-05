@@ -86,6 +86,41 @@ async function extractWithOpenAI(report) {
   }
 }
 
+async function extractWithGroq(report) {
+  try {
+    const client = new OpenAI({
+      apiKey: config.groqApiKey,
+      baseURL: "https://api.groq.com/openai/v1",
+    });
+    const response = await client.chat.completions.create({
+      model: config.groqModel,
+      messages: [
+        { role: "system", content: instructions },
+        { role: "user", content: `Tenant maintenance report:\n${report}` },
+      ],
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name: "maintenance_ticket_extraction",
+          strict: true,
+          schema: extractionJsonSchema,
+        },
+      },
+      temperature: 0,
+    });
+
+    const outputText = response.choices?.[0]?.message?.content?.trim();
+    if (!outputText) {
+      throw new Error("The model returned no structured output.");
+    }
+
+    return parseStructuredExtraction(report, outputText, "Groq");
+  } catch (error) {
+    if (error instanceof LlmProviderError) throw error;
+    throw new LlmProviderError("Groq extraction failed.", { cause: error });
+  }
+}
+
 async function extractWithGemini(report) {
   try {
     const client = new GoogleGenAI({ apiKey: config.geminiApiKey });
@@ -113,6 +148,12 @@ async function extractWithGemini(report) {
 }
 
 export async function extractReport(report) {
+  if (config.aiProvider === "groq") {
+    if (!config.groqApiKey) throw new LlmConfigurationError();
+    const result = await extractWithGroq(report);
+    return { ...result, processingMode: "groq" };
+  }
+
   if (config.aiProvider === "gemini") {
     if (!config.geminiApiKey) throw new LlmConfigurationError();
     const result = await extractWithGemini(report);

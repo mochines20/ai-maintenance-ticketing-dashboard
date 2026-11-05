@@ -7,7 +7,11 @@ const app = createApp({ database });
 
 const server = app.listen(config.port, () => {
   console.log(`Maintenance dashboard API running on http://localhost:${config.port}`);
-  const configured = config.aiProvider === "gemini" ? Boolean(config.geminiApiKey) : Boolean(config.openaiApiKey);
+  const configured = config.aiProvider === "gemini"
+    ? Boolean(config.geminiApiKey)
+    : config.aiProvider === "groq"
+      ? Boolean(config.groqApiKey)
+      : Boolean(config.openaiApiKey);
   console.log(`${config.aiProvider} extraction: ${configured ? "configured" : "not configured"}`);
 });
 

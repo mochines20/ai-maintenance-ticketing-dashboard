@@ -33,9 +33,15 @@ export function createApp({
       ai: {
         configured: config.aiProvider === "gemini"
           ? Boolean(config.geminiApiKey)
-          : Boolean(config.openaiApiKey),
+          : config.aiProvider === "groq"
+            ? Boolean(config.groqApiKey)
+            : Boolean(config.openaiApiKey),
         provider: config.aiProvider,
-        model: config.aiProvider === "gemini" ? config.geminiModel : config.openaiModel,
+        model: config.aiProvider === "gemini"
+          ? config.geminiModel
+          : config.aiProvider === "groq"
+            ? config.groqModel
+            : config.openaiModel,
       },
     });
   });
