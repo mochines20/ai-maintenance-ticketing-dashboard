@@ -38,6 +38,15 @@ export function applySafetyRules(report, tickets) {
         missing_information: true,
         missing_fields: addMissingField(next, "unit_number"),
       };
+    } else {
+      const remainingFields = next.missing_fields.filter(
+        (field) => field !== "unit_number",
+      );
+      next = {
+        ...next,
+        missing_information: remainingFields.length > 0,
+        missing_fields: remainingFields,
+      };
     }
 
     return next;

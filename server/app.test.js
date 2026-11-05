@@ -21,6 +21,12 @@ describe("maintenance ticket API", () => {
             description: "Major water leak from the bathroom ceiling.",
             missing_information: false,
             missing_fields: [],
+            source_evidence: {
+              issue_type: null,
+              priority: null,
+              unit_number: "4B",
+              description: "major bathroom ceiling leak",
+            },
           },
         ],
       }),
@@ -31,10 +37,18 @@ describe("maintenance ticket API", () => {
     await database.close();
   });
 
-  it("creates, lists, and updates a ticket", async () => {
-    const created = await request(app)
-      .post("/api/reports")
+  it("analyzes without persistence, commits review, lists, and updates a ticket", async () => {
+    const analyzed = await request(app)
+      .post("/api/intake/analyze")
       .send({ report: "Unit 4B has a major bathroom ceiling leak." })
+      .expect(200);
+
+    const beforeCommit = await request(app).get("/api/tickets").expect(200);
+    expect(beforeCommit.body.tickets).toHaveLength(0);
+
+    const created = await request(app)
+      .post(`/api/intake/${analyzed.body.analysisId}/commit`)
+      .send({ tickets: analyzed.body.tickets })
       .expect(201);
 
     expect(created.body.tickets).toHaveLength(1);
@@ -52,7 +66,7 @@ describe("maintenance ticket API", () => {
 
   it("rejects reports that are too short", async () => {
     const response = await request(app)
-      .post("/api/reports")
+      .post("/api/intake/analyze")
       .send({ report: "Leak" })
       .expect(400);
     expect(response.body.error).toBe("Validation failed.");
@@ -63,6 +77,13 @@ describe("maintenance ticket API", () => {
       .patch("/api/tickets/1/status")
       .send({ status: "Archived" })
       .expect(400);
+  });
+
+  it("rejects a missing or expired review session", async () => {
+    await request(app)
+      .post("/api/intake/not-a-real-analysis/commit")
+      .send({ tickets: [] })
+      .expect(404);
   });
 });
 

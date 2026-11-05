@@ -1,149 +1,281 @@
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
-import { getHealth, getTickets, submitReport, updateTicketStatus } from "./api";
-import type { Priority, Ticket, TicketStatus } from "./types";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from "react";
+import {
+  analyzeReport,
+  commitAnalysis,
+  getHealth,
+  getTickets,
+  updateTicketStatus,
+} from "./api";
+import type {
+  AnalyzeReportResponse,
+  ExtractedTicket,
+  IssueType,
+  Priority,
+  Ticket,
+  TicketStatus,
+} from "./types";
 
 const sampleReports = [
-  {
-    label: "Water + outlet",
-    text: "Hi, this is apartment 4B. There is a major water leak coming from the ceiling in the bathroom and it's dripping onto the outlet!",
-  },
-  {
-    label: "No heat",
-    text: "Hey, the heat isn't working in my place and it's freezing. Can someone come today?",
-  },
-  {
-    label: "Two issues",
-    text: "Unit 12C here. The kitchen sink is clogged, and also the hallway light outside my door has been flickering for a week.",
-  },
-  {
-    label: "Possible gas",
-    text: "Yeah hi, so um, I'm in 7A, and I don't know if it's a big deal, but there's kind of a weird smell near the stove, like maybe gas? My neighbor said it's probably nothing but I wanted to call anyway.",
-  },
-  {
-    label: "Window repair",
-    text: "This is 2D. My bedroom window won't close all the way. Not urgent, whenever you get a chance.",
-  },
+  { label: "Water and outlet", text: "Hi, this is apartment 4B. There is a major water leak coming from the ceiling in the bathroom and it's dripping onto the outlet!" },
+  { label: "No heat", text: "Hey, the heat isn't working in my place and it's freezing. Can someone come today?" },
+  { label: "Two issues", text: "Unit 12C here. The kitchen sink is clogged, and also the hallway light outside my door has been flickering for a week." },
+  { label: "Possible gas", text: "Yeah hi, so um, I'm in 7A, and I don't know if it's a big deal, but there's kind of a weird smell near the stove, like maybe gas? My neighbor said it's probably nothing but I wanted to call anyway." },
+  { label: "Window repair", text: "This is 2D. My bedroom window won't close all the way. Not urgent, whenever you get a chance." },
 ] as const;
 
 const statusOptions: TicketStatus[] = ["New", "In Progress", "Done"];
-const priorityOrder: Record<Priority, number> = {
-  Emergency: 0,
-  High: 1,
-  Medium: 2,
-  Low: 3,
-};
+const priorityOptions: Priority[] = ["Low", "Medium", "High", "Emergency"];
+const issueOptions: IssueType[] = ["Plumbing", "Electrical", "HVAC", "Gas/Safety", "Structural", "Appliance", "General", "Other"];
+const priorityRank: Record<Priority, number> = { Emergency: 0, High: 1, Medium: 2, Low: 3 };
 
-type IconName = "logo" | "plus" | "spark" | "alert" | "clock" | "check" | "filter" | "search" | "map";
+type IconName = "home" | "plus" | "search" | "alert" | "follow" | "check" | "clipboard" | "close" | "spark" | "map" | "calendar" | "building" | "chevron" | "edit";
 
-function Icon({ name, size = 20 }: { name: IconName; size?: number }) {
+function Icon({ name, size = 18 }: { name: IconName; size?: number }) {
   const paths: Record<IconName, ReactNode> = {
-    logo: <><path d="M4 13.5 12 5l8 8.5"/><path d="M6.5 11.5V21h11v-9.5"/><path d="M9.5 21v-6h5v6"/><path d="m16.8 4.2 3 3"/></>,
+    home: <><path d="M4 11.5 12 5l8 6.5"/><path d="M6.5 10.5V20h11v-9.5"/><path d="M10 20v-5h4v5"/></>,
     plus: <><path d="M12 5v14M5 12h14"/></>,
-    spark: <><path d="m12 3-1.4 4.1a5 5 0 0 1-3.2 3.2L3 12l4.4 1.7a5 5 0 0 1 3.2 3.2L12 21l1.4-4.1a5 5 0 0 1 3.2-3.2L21 12l-4.4-1.7a5 5 0 0 1-3.2-3.2L12 3Z"/></>,
-    alert: <><path d="M10.3 3.7 2.4 17.5A2 2 0 0 0 4.1 20h15.8a2 2 0 0 0 1.7-2.5L13.7 3.7a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4M12 17h.01"/></>,
-    clock: <><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></>,
-    check: <><path d="m5 12 4 4L19 6"/></>,
-    filter: <><path d="M4 6h16M7 12h10M10 18h4"/></>,
     search: <><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></>,
+    alert: <><path d="M10.3 3.7 2.4 17.5A2 2 0 0 0 4.1 20h15.8a2 2 0 0 0 1.7-2.5L13.7 3.7a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4M12 17h.01"/></>,
+    follow: <><circle cx="12" cy="12" r="8"/><path d="M12 8v4M12 16h.01"/></>,
+    check: <><path d="m5 12 4 4L19 6"/></>,
+    clipboard: <><rect x="6" y="5" width="12" height="16" rx="2"/><path d="M9 5V3h6v2M9 10h6M9 14h6"/></>,
+    close: <><path d="m6 6 12 12M18 6 6 18"/></>,
+    spark: <><path d="m12 3-1.3 4a5 5 0 0 1-3.2 3.2L3.5 12l4 1.8a5 5 0 0 1 3.2 3.2l1.3 4 1.3-4a5 5 0 0 1 3.2-3.2l4-1.8-4-1.8A5 5 0 0 1 13.3 7L12 3Z"/></>,
     map: <><path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/></>,
+    calendar: <><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M8 3v4M16 3v4M4 10h16"/></>,
+    building: <><path d="M5 21V4h10v17M15 9h4v12M8 8h3M8 12h3M8 16h3M3 21h18"/></>,
+    chevron: <><path d="m9 6 6 6-6 6"/></>,
+    edit: <><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z"/></>,
   };
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      {paths[name]}
-    </svg>
-  );
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>;
 }
 
-interface StatCardProps {
-  label: string;
-  value: number;
-  detail: string;
-  tone?: string;
-  icon: IconName;
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : "An unexpected error occurred.";
 }
 
-function StatCard({ label, value, detail, tone = "", icon }: StatCardProps) {
-  return (
-    <article className={`stat-card ${tone}`}>
-      <div className="stat-icon"><Icon name={icon} /></div>
-      <div><p>{label}</p><strong>{value}</strong><span>{detail}</span></div>
-    </article>
-  );
-}
-
-interface TicketCardProps {
-  ticket: Ticket;
-  onStatusChange: (id: number, status: TicketStatus) => Promise<void>;
-  updating: boolean;
-}
-
-function TicketCard({ ticket, onStatusChange, updating }: TicketCardProps) {
-  const created = new Intl.DateTimeFormat("en", {
+function formatDate(value: string) {
+  return new Intl.DateTimeFormat("en", {
     month: "short",
     day: "numeric",
     hour: "numeric",
     minute: "2-digit",
-  }).format(new Date(ticket.created_at));
-
-  return (
-    <article className={`ticket-card priority-${ticket.priority.toLowerCase()}`}>
-      <div className="ticket-topline">
-        <div className="ticket-id">WO-{String(ticket.id).padStart(4, "0")}</div>
-        <span className={`priority-badge ${ticket.priority.toLowerCase()}`}>
-          {ticket.priority === "Emergency" && <Icon name="alert" size={14} />}
-          {ticket.priority}
-        </span>
-        {ticket.missing_information && <span className="follow-up-badge">Needs follow-up</span>}
-        <time>{created}</time>
-      </div>
-      <div className="ticket-body">
-        <div>
-          <p className="ticket-type">{ticket.issue_type}</p>
-          <h3>{ticket.description}</h3>
-          <div className="ticket-meta">
-            <span><Icon name="map" size={15} /> {ticket.unit_number || "Unit not provided"}</span>
-            <span>Report #{ticket.report_id}</span>
-            <span className="mode-dot openai">AI extracted</span>
-          </div>
-          {ticket.missing_information && (
-            <p className="missing-note">Missing: {ticket.missing_fields.join(", ").replaceAll("_", " ")}</p>
-          )}
-        </div>
-        <label className="status-control">
-          <span>Status</span>
-          <select
-            value={ticket.status}
-            disabled={updating}
-            onChange={(event) => void onStatusChange(ticket.id, event.target.value as TicketStatus)}
-          >
-            {statusOptions.map((status) => <option key={status}>{status}</option>)}
-          </select>
-        </label>
-      </div>
-    </article>
-  );
+  }).format(new Date(value));
 }
 
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : "An unexpected error occurred.";
+function PriorityBadge({ priority }: { priority: Priority }) {
+  return <span className={`priority-chip priority-${priority.toLowerCase()}`}>{priority === "Emergency" && <Icon name="alert" size={13} />}{priority}</span>;
+}
+
+function KpiCard({ label, value, icon, tone }: { label: string; value: number; icon: IconName; tone?: string }) {
+  return <article className={`kpi-card ${tone || ""}`}><span className="kpi-icon"><Icon name={icon} /></span><div><strong>{value}</strong><p>{label}</p></div></article>;
+}
+
+function HighlightedReport({ report, evidence }: { report: string; evidence: string | null }) {
+  if (!evidence) return <>{report}</>;
+  const start = report.toLocaleLowerCase().indexOf(evidence.toLocaleLowerCase());
+  if (start < 0) return <>{report}</>;
+  const end = start + evidence.length;
+  return <>{report.slice(0, start)}<mark>{report.slice(start, end)}</mark>{report.slice(end)}</>;
+}
+
+interface IntakeDialogProps {
+  open: boolean;
+  aiConfigured: boolean | null;
+  onClose: () => void;
+  onCreated: (tickets: Ticket[]) => void;
+}
+
+type IntakePhase = "entry" | "analyzing" | "review" | "saving" | "success";
+
+function IntakeDialog({ open, aiConfigured, onClose, onCreated }: IntakeDialogProps) {
+  const [phase, setPhase] = useState<IntakePhase>("entry");
+  const [report, setReport] = useState("");
+  const [analysis, setAnalysis] = useState<AnalyzeReportResponse | null>(null);
+  const [tickets, setTickets] = useState<ExtractedTicket[]>([]);
+  const [activeEvidence, setActiveEvidence] = useState<string | null>(null);
+  const [error, setError] = useState("");
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  function resetAndClose() {
+    if (phase === "analyzing" || phase === "saving") return;
+    setPhase("entry");
+    setReport("");
+    setAnalysis(null);
+    setTickets([]);
+    setActiveEvidence(null);
+    setError("");
+    onClose();
+  }
+
+  useEffect(() => {
+    if (!open) return;
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") resetAndClose();
+    };
+    window.addEventListener("keydown", handleKey);
+    window.setTimeout(() => textareaRef.current?.focus(), 0);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [open, phase]);
+
+  if (!open) return null;
+
+  const stepIndex = phase === "entry" ? 0 : phase === "analyzing" ? 1 : phase === "review" || phase === "saving" ? 2 : 3;
+  const steps = ["Report entered", "AI analysis", "Human review", "Work orders created"];
+
+  async function handleAnalyze(event: FormEvent) {
+    event.preventDefault();
+    if (report.trim().length < 10) {
+      setError("Enter a complete maintenance report before analysis.");
+      return;
+    }
+    setPhase("analyzing");
+    setError("");
+    try {
+      const result = await analyzeReport(report);
+      setAnalysis(result);
+      setTickets(result.tickets);
+      setPhase("review");
+    } catch (analysisError) {
+      setError(errorMessage(analysisError));
+      setPhase("entry");
+    }
+  }
+
+  function updateTicket(index: number, patch: Partial<ExtractedTicket>) {
+    setTickets((current) => current.map((ticket, ticketIndex) => {
+      if (ticketIndex !== index) return ticket;
+      const next = { ...ticket, ...patch };
+      const fields = next.unit_number
+        ? next.missing_fields.filter((field) => field !== "unit_number")
+        : Array.from(new Set([...next.missing_fields, "unit_number"]));
+      return { ...next, missing_fields: fields, missing_information: fields.length > 0 };
+    }));
+  }
+
+  function addIssue() {
+    setTickets((current) => [...current, {
+      issue_type: "General",
+      priority: "Medium",
+      unit_number: null,
+      description: "Describe the additional maintenance issue.",
+      missing_information: true,
+      missing_fields: ["unit_number"],
+      source_evidence: { issue_type: null, priority: null, unit_number: null, description: null },
+    }]);
+  }
+
+  async function handleCommit() {
+    if (!analysis) return;
+    setPhase("saving");
+    setError("");
+    try {
+      const result = await commitAnalysis(analysis.analysisId, tickets);
+      onCreated(result.tickets);
+      setPhase("success");
+    } catch (commitError) {
+      setError(errorMessage(commitError));
+      setPhase("review");
+    }
+  }
+
+  return <div className="dialog-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) resetAndClose(); }}>
+    <section className="intake-dialog" role="dialog" aria-modal="true" aria-labelledby="intake-title">
+      <header className="intake-header">
+        <div><span className="section-kicker">Contextual AI intake</span><h2 id="intake-title">Review the report before creating work orders</h2></div>
+        <button className="icon-button" type="button" aria-label="Close intake" onClick={resetAndClose}><Icon name="close" /></button>
+      </header>
+
+      <ol className="workflow-steps" aria-label="Intake progress">
+        {steps.map((step, index) => <li key={step} className={`${index === stepIndex ? "active" : ""} ${index < stepIndex ? "complete" : ""}`}><span>{index < stepIndex ? <Icon name="check" size={13} /> : index + 1}</span>{step}</li>)}
+      </ol>
+
+      {error && <div className="inline-message error" role="alert"><Icon name="alert" size={16} />{error}</div>}
+
+      {phase === "success" ? <div className="intake-success"><span><Icon name="check" size={26} /></span><h3>Work orders created</h3><p>The reviewed tickets are now in the attention queue and ready for status management.</p><button className="primary-action" type="button" onClick={resetAndClose}>View work orders</button></div> :
+      <div className="intake-grid">
+        <section className="caller-panel">
+          <div className="panel-heading"><span><Icon name="clipboard" /></span><div><p>Original caller report</p><small>Source of truth</small></div></div>
+          {phase === "entry" || phase === "analyzing" ? <form onSubmit={handleAnalyze} className="report-form">
+            <label htmlFor="caller-report">Caller report</label>
+            <textarea ref={textareaRef} id="caller-report" value={report} maxLength={2000} onChange={(event) => setReport(event.target.value)} placeholder="Paste or type the report exactly as received..." disabled={phase === "analyzing"} />
+            <div className="field-meta"><span>Do not summarize before analysis</span><span>{report.length}/2000</span></div>
+            {aiConfigured === false && <p className="configuration-warning">Add <code>OPENAI_API_KEY</code> to <code>.env</code> and restart the server.</p>}
+            <button className="primary-action" disabled={phase === "analyzing" || aiConfigured === false}>{phase === "analyzing" ? <><span className="button-spinner" />Analyzing report</> : <><Icon name="spark" />Analyze with AI</>}</button>
+            <div className="sample-reports"><p>Client test reports</p><div>{sampleReports.map((sample, index) => <button key={sample.label} type="button" onClick={() => setReport(sample.text)}><span>{index + 1}</span>{sample.label}</button>)}</div></div>
+          </form> : <div className="report-source" aria-live="polite"><p><HighlightedReport report={analysis?.originalReport || report} evidence={activeEvidence} /></p>{activeEvidence && <button type="button" onClick={() => setActiveEvidence(null)}>Clear source highlight</button>}</div>}
+        </section>
+
+        <section className="extraction-panel">
+          <div className="panel-heading"><span className="ai-mark"><Icon name="spark" /></span><div><p>Structured extraction</p><small>{phase === "review" || phase === "saving" ? `${tickets.length} issue${tickets.length === 1 ? "" : "s"} detected` : "Awaiting analysis"}</small></div></div>
+          {phase === "entry" || phase === "analyzing" ? <div className="extraction-placeholder"><Icon name="spark" size={24} /><h3>{phase === "analyzing" ? "Analyzing the actual report" : "Extraction appears here"}</h3><p>{phase === "analyzing" ? "The next screen will reflect the real API response." : "The AI will separate issues, preserve missing details, and flag safety risks for review."}</p></div> : <div className="review-content">
+            {tickets.some((ticket) => ticket.priority === "Emergency") && <div className="emergency-banner"><Icon name="alert" /><div><strong>Immediate safety risk detected</strong><span>Emergency priority will be enforced again when the review is saved.</span></div></div>}
+            <div className="review-list">
+              {tickets.map((ticket, index) => <article className="review-card" key={`${index}-${ticket.issue_type}`}>
+                <div className="review-card-header"><div><span>Work order {index + 1}</span><PriorityBadge priority={ticket.priority} /></div>{tickets.length > 1 && <button type="button" onClick={() => setTickets((current) => current.filter((_, ticketIndex) => ticketIndex !== index))}>Remove</button>}</div>
+                <div className="review-fields">
+                  <label><span>Category {ticket.source_evidence.issue_type && <button type="button" onClick={() => setActiveEvidence(ticket.source_evidence.issue_type)}>Show source</button>}</span><select value={ticket.issue_type} onChange={(event) => updateTicket(index, { issue_type: event.target.value as IssueType })}>{issueOptions.map((option) => <option key={option}>{option}</option>)}</select></label>
+                  <label><span>Urgency {ticket.source_evidence.priority && <button type="button" onClick={() => setActiveEvidence(ticket.source_evidence.priority)}>Show source</button>}</span><select value={ticket.priority} onChange={(event) => updateTicket(index, { priority: event.target.value as Priority })}>{priorityOptions.map((option) => <option key={option}>{option}</option>)}</select></label>
+                  <label><span>Unit {ticket.source_evidence.unit_number && <button type="button" onClick={() => setActiveEvidence(ticket.source_evidence.unit_number)}>Show source</button>}</span><input value={ticket.unit_number || ""} onChange={(event) => updateTicket(index, { unit_number: event.target.value.trim() || null })} placeholder="Unit not provided" /></label>
+                  <label className="wide-field"><span>Description {ticket.source_evidence.description && <button type="button" onClick={() => setActiveEvidence(ticket.source_evidence.description)}>Show source</button>}</span><textarea value={ticket.description} onChange={(event) => updateTicket(index, { description: event.target.value })} /></label>
+                </div>
+                {ticket.missing_information && <div className="followup-note"><Icon name="follow" size={15} /><strong>Needs follow-up</strong><span>{ticket.missing_fields.map((field) => field.replaceAll("_", " ")).join(", ")}</span></div>}
+              </article>)}
+            </div>
+            <button className="add-issue-button" type="button" onClick={addIssue}><Icon name="plus" size={15} />Add missed issue</button>
+          </div>}
+        </section>
+      </div>}
+
+      {(phase === "review" || phase === "saving") && <footer className="intake-footer"><p><Icon name="edit" size={15} />Review every field. Tickets are not in the database yet.</p><div><button className="secondary-action" type="button" onClick={() => setPhase("entry")} disabled={phase === "saving"}>Start over</button><button className="primary-action" type="button" onClick={() => void handleCommit()} disabled={phase === "saving"}>{phase === "saving" ? <><span className="button-spinner" />Saving work orders</> : <>Create {tickets.length} work order{tickets.length === 1 ? "" : "s"}<Icon name="chevron" size={16} /></>}</button></div></footer>}
+    </section>
+  </div>;
+}
+
+interface TicketInspectorProps {
+  ticket: Ticket | null;
+  updating: boolean;
+  onStatusChange: (id: number, status: TicketStatus) => Promise<void>;
+}
+
+function TicketInspector({ ticket, updating, onStatusChange }: TicketInspectorProps) {
+  if (!ticket) return <aside className="inspector empty-inspector"><span><Icon name="clipboard" size={24} /></span><h3>Select a work order</h3><p>Ticket details and the original report will appear here.</p></aside>;
+  return <aside className="inspector" key={ticket.id}>
+    <div className="inspector-top"><div><span className="section-kicker">Ticket inspector</span><h2>WO-{String(ticket.id).padStart(4, "0")}</h2></div><PriorityBadge priority={ticket.priority} /></div>
+    {ticket.missing_information && <div className="inspector-followup"><Icon name="follow" size={16} /><div><strong>Needs follow-up</strong><span>{ticket.missing_fields.map((field) => field.replaceAll("_", " ")).join(", ")}</span></div></div>}
+    <section className="inspector-section"><h3>{ticket.description}</h3><dl className="detail-grid"><div><dt>Category</dt><dd>{ticket.issue_type}</dd></div><div><dt>Unit</dt><dd>{ticket.unit_number || "Unit not provided"}</dd></div><div><dt>Created</dt><dd>{formatDate(ticket.created_at)}</dd></div><div><dt>Source report</dt><dd>#{ticket.report_id}</dd></div></dl></section>
+    <section className="inspector-section original-report"><div className="inspector-section-title"><Icon name="clipboard" size={15} /><h3>Original report</h3></div><blockquote>{ticket.original_text}</blockquote></section>
+    <section className="inspector-section status-section"><label htmlFor={`status-${ticket.id}`}>Workflow status</label><select id={`status-${ticket.id}`} value={ticket.status} disabled={updating} onChange={(event) => void onStatusChange(ticket.id, event.target.value as TicketStatus)}>{statusOptions.map((status) => <option key={status}>{status}</option>)}</select><p>Priority and follow-up are managed separately from workflow status.</p></section>
+  </aside>;
 }
 
 export default function App() {
   const [tickets, setTickets] = useState<Ticket[]>([]);
-  const [report, setReport] = useState("");
+  const [selectedId, setSelectedId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
   const [updatingId, setUpdatingId] = useState<number | null>(null);
   const [aiConfigured, setAiConfigured] = useState<boolean | null>(null);
-  const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
-  const [statusFilter, setStatusFilter] = useState<TicketStatus | "All">("All");
+  const [intakeOpen, setIntakeOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"All" | "Open" | TicketStatus>("All");
+  const [sort, setSort] = useState<"attention" | "newest" | "unit">("attention");
+  const [notice, setNotice] = useState("");
+  const [error, setError] = useState("");
+  const [recentIds, setRecentIds] = useState<Set<number>>(new Set());
+  const queueRef = useRef<HTMLElement>(null);
 
-  async function loadTickets() {
+  async function loadTickets(preferredId?: number) {
     try {
       const data = await getTickets();
       setTickets(data.tickets);
+      setSelectedId((current) => preferredId ?? current ?? data.tickets[0]?.id ?? null);
       setError("");
     } catch (loadError) {
       setError(errorMessage(loadError));
@@ -154,44 +286,31 @@ export default function App() {
 
   useEffect(() => {
     void loadTickets();
-    getHealth()
-      .then((health) => setAiConfigured(health.ai.configured))
-      .catch((healthError: unknown) => setError(errorMessage(healthError)));
+    getHealth().then((health) => setAiConfigured(health.ai.configured)).catch((healthError: unknown) => setError(errorMessage(healthError)));
   }, []);
 
-  const stats = useMemo(() => ({
-    total: tickets.length,
-    emergency: tickets.filter((ticket) => ticket.priority === "Emergency" && ticket.status !== "Done").length,
-    progress: tickets.filter((ticket) => ticket.status === "In Progress").length,
-    followUp: tickets.filter((ticket) => ticket.missing_information && ticket.status !== "Done").length,
+  const kpis = useMemo(() => ({
+    open: tickets.filter((ticket) => ticket.status !== "Done").length,
+    emergencies: tickets.filter((ticket) => ticket.status !== "Done" && ticket.priority === "Emergency").length,
+    followup: tickets.filter((ticket) => ticket.status !== "Done" && ticket.missing_information).length,
+    completed: tickets.filter((ticket) => ticket.status === "Done").length,
   }), [tickets]);
 
-  const visibleTickets = useMemo(() => tickets
-    .filter((ticket) => statusFilter === "All" || ticket.status === statusFilter)
-    .filter((ticket) => `${ticket.description} ${ticket.issue_type} ${ticket.unit_number || ""}`.toLowerCase().includes(query.toLowerCase()))
-    .sort((a, b) => priorityOrder[a.priority] - priorityOrder[b.priority]),
-  [tickets, statusFilter, query]);
+  const visibleTickets = useMemo(() => {
+    const lowerQuery = query.trim().toLocaleLowerCase();
+    return tickets
+      .filter((ticket) => statusFilter === "All" || (statusFilter === "Open" ? ticket.status !== "Done" : ticket.status === statusFilter))
+      .filter((ticket) => !lowerQuery || `${ticket.description} ${ticket.issue_type} ${ticket.unit_number || ""} ${ticket.original_text}`.toLocaleLowerCase().includes(lowerQuery))
+      .sort((a, b) => {
+        if (sort === "newest") return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+        if (sort === "unit") return (a.unit_number || "ZZZ").localeCompare(b.unit_number || "ZZZ");
+        const attentionA = priorityRank[a.priority] * 10 + (a.missing_information ? 0 : 1);
+        const attentionB = priorityRank[b.priority] * 10 + (b.missing_information ? 0 : 1);
+        return attentionA - attentionB || new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      });
+  }, [tickets, query, statusFilter, sort]);
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (report.trim().length < 10) {
-      setError("Please enter a complete maintenance report.");
-      return;
-    }
-    setSubmitting(true);
-    setError("");
-    setNotice("");
-    try {
-      const result = await submitReport(report);
-      setReport("");
-      setNotice(`${result.tickets.length} AI-extracted work order${result.tickets.length > 1 ? "s" : ""} created.`);
-      await loadTickets();
-    } catch (submitError) {
-      setError(errorMessage(submitError));
-    } finally {
-      setSubmitting(false);
-    }
-  }
+  const selectedTicket = tickets.find((ticket) => ticket.id === selectedId) || null;
 
   async function handleStatusChange(id: number, status: TicketStatus) {
     setUpdatingId(id);
@@ -199,106 +318,51 @@ export default function App() {
     try {
       const { ticket } = await updateTicketStatus(id, status);
       setTickets((current) => current.map((item) => item.id === id ? ticket : item));
-    } catch (updateError) {
-      setError(errorMessage(updateError));
+      setNotice(`WO-${String(id).padStart(4, "0")} moved to ${status}.`);
+      window.setTimeout(() => setNotice(""), 2600);
+    } catch (statusError) {
+      setError(errorMessage(statusError));
     } finally {
       setUpdatingId(null);
     }
   }
 
-  return (
-    <div className="app-shell">
-      <header className="topbar">
-        <div className="brand">
-          <div className="brand-mark"><Icon name="logo" size={24} /></div>
-          <div><strong>MaintainIQ</strong><span>Property Operations</span></div>
-        </div>
-        <div className={`system-status ${aiConfigured === false ? "offline" : ""}`}>
-          <span /> {aiConfigured === false ? "API key required" : "AI intake online"}
-        </div>
-      </header>
+  function handleCreated(createdTickets: Ticket[]) {
+    const ids = new Set(createdTickets.map((ticket) => ticket.id));
+    setRecentIds(ids);
+    setNotice(`${createdTickets.length} reviewed work order${createdTickets.length === 1 ? "" : "s"} added to the queue.`);
+    void loadTickets(createdTickets[0]?.id);
+    window.setTimeout(() => setRecentIds(new Set()), 1800);
+  }
 
-      <main>
-        <section className="hero-row">
-          <div>
-            <p className="eyebrow">Maintenance command center</p>
-            <h1>Turn tenant reports into actionable work orders.</h1>
-            <p className="hero-copy">AI-assisted intake, safety-aware prioritization, and a clear view of every open issue.</p>
+  return <div className="app-shell">
+    <header className="app-header">
+      <a className="brand" href="#workspace" aria-label="Maintenance Desk workspace"><span className="brand-mark"><Icon name="building" size={19} /></span><span><strong>Maintenance Desk</strong><small>The living workspace</small></span></a>
+      <nav aria-label="Primary navigation"><button type="button" className="nav-link active" onClick={() => queueRef.current?.scrollIntoView({ behavior: "smooth" })}><Icon name="home" size={16} />Workspace</button></nav>
+      <div className="header-actions"><label className="global-search"><Icon name="search" size={16} /><span className="sr-only">Search work orders</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search work orders" /></label><span className={`ai-status ${aiConfigured ? "ready" : ""}`} title={aiConfigured ? "OpenAI extraction is configured" : "OpenAI API key is required"}><i />{aiConfigured ? "AI ready" : "AI setup needed"}</span><button className="new-report-button" type="button" onClick={() => setIntakeOpen(true)}><Icon name="plus" size={16} />New report</button></div>
+    </header>
+
+    <main id="workspace" className="workspace">
+      <section className="workspace-heading"><div><span className="section-kicker">Property operations</span><h1>Maintenance workspace</h1><p>Review what needs attention, understand the source, and move work forward.</p></div><button className="mobile-new-report" type="button" onClick={() => setIntakeOpen(true)}><Icon name="plus" size={16} />New report</button></section>
+
+      <section className="kpi-grid" aria-label="Maintenance summary"><KpiCard label="Open work orders" value={kpis.open} icon="clipboard" /><KpiCard label="Open emergencies" value={kpis.emergencies} icon="alert" tone="risk" /><KpiCard label="Needs follow-up" value={kpis.followup} icon="follow" tone="warning" /><KpiCard label="Completed work orders" value={kpis.completed} icon="check" tone="complete" /></section>
+
+      {error && <div className="page-message error" role="alert"><Icon name="alert" size={16} />{error}</div>}
+      {notice && <div className="page-message success" role="status"><Icon name="check" size={16} />{notice}</div>}
+
+      <section className="operations-grid" ref={queueRef}>
+        <section className="attention-surface">
+          <header className="surface-header"><div><span className="section-kicker">Prioritized work</span><h2>Attention queue</h2><p>{visibleTickets.length} of {tickets.length} work orders</p></div><div className="queue-controls"><label><span className="sr-only">Filter by status</span><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as typeof statusFilter)}><option>All</option><option>Open</option>{statusOptions.map((status) => <option key={status}>{status}</option>)}</select></label><label><span className="sr-only">Sort work orders</span><select value={sort} onChange={(event) => setSort(event.target.value as typeof sort)}><option value="attention">Attention first</option><option value="newest">Newest first</option><option value="unit">Unit number</option></select></label></div></header>
+
+          <div className="table-wrap">
+            {loading ? <div className="queue-empty"><span className="button-spinner dark" /><h3>Loading work orders</h3></div> : visibleTickets.length === 0 ? <div className="queue-empty"><span><Icon name="check" size={24} /></span><h3>No matching work orders</h3><p>{tickets.length === 0 ? "Analyze a caller report to create the first work order." : "Try a different search or status filter."}</p><button type="button" onClick={() => setIntakeOpen(true)}>Create new report</button></div> : <table className="work-order-table"><thead><tr><th>Work order</th><th>Unit</th><th>Priority</th><th>Status</th><th>Updated</th><th><span className="sr-only">Open</span></th></tr></thead><tbody>{visibleTickets.map((ticket) => <tr key={ticket.id} className={`${selectedId === ticket.id ? "selected" : ""} ${recentIds.has(ticket.id) ? "new-row" : ""}`} onClick={() => setSelectedId(ticket.id)} tabIndex={0} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setSelectedId(ticket.id); } }}><td><div className="order-primary"><strong>WO-{String(ticket.id).padStart(4, "0")}</strong>{ticket.missing_information && <span className="followup-dot" title="Needs follow-up"><Icon name="follow" size={13} /></span>}</div><span>{ticket.issue_type}</span><p>{ticket.description}</p></td><td>{ticket.unit_number || <span className="not-provided">Not provided</span>}</td><td><PriorityBadge priority={ticket.priority} /></td><td><span className={`status-pill status-${ticket.status.toLowerCase().replace(" ", "-")}`}>{ticket.status}</span></td><td>{formatDate(ticket.updated_at)}</td><td><Icon name="chevron" size={15} /></td></tr>)}</tbody></table>}
           </div>
-          <div className="date-chip">Live queue <span>{new Intl.DateTimeFormat("en", { month: "short", day: "numeric", year: "numeric" }).format(new Date())}</span></div>
         </section>
 
-        <section className="stats-grid" aria-label="Ticket summary">
-          <StatCard label="Total tickets" value={stats.total} detail="All recorded work orders" icon="plus" />
-          <StatCard label="Emergency" value={stats.emergency} detail="Requires immediate action" tone="danger" icon="alert" />
-          <StatCard label="In progress" value={stats.progress} detail="Assigned and underway" tone="blue" icon="clock" />
-          <StatCard label="Needs follow-up" value={stats.followUp} detail="Missing required details" tone="amber" icon="spark" />
-        </section>
+        <TicketInspector ticket={selectedTicket} updating={updatingId === selectedTicket?.id} onStatusChange={handleStatusChange} />
+      </section>
+    </main>
 
-        <section className="workspace-grid">
-          <aside className="intake-card">
-            <div className="section-heading">
-              <div className="heading-icon"><Icon name="spark" /></div>
-              <div><p>New request</p><h2>AI maintenance intake</h2></div>
-            </div>
-            <p className="section-copy">Paste a caller transcript or type the tenant's report exactly as received.</p>
-            {aiConfigured === false && (
-              <div className="config-note" role="status">
-                Add <code>OPENAI_API_KEY</code> to <code>.env</code> and restart the server to enable extraction.
-              </div>
-            )}
-            <form onSubmit={(event) => void handleSubmit(event)}>
-              <label htmlFor="report">Tenant report</label>
-              <textarea
-                id="report"
-                value={report}
-                maxLength={2000}
-                onChange={(event) => setReport(event.target.value)}
-                placeholder="Example: Hi, this is apartment 4B. Water is leaking from the ceiling..."
-              />
-              <div className="textarea-footer"><span>Unstructured text accepted</span><span>{report.length}/2000</span></div>
-              <button className="primary-button" disabled={submitting || aiConfigured === false}>
-                <Icon name="spark" size={18} />
-                {submitting ? "Analyzing report..." : "Create work order"}
-              </button>
-            </form>
-            <div className="sample-block">
-              <p>Quick test reports</p>
-              <div className="sample-list">
-                {sampleReports.map((sample, index) => (
-                  <button key={sample.label} type="button" onClick={() => setReport(sample.text)}>
-                    <span>{index + 1}</span>{sample.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </aside>
-
-          <section className="queue-panel">
-            <div className="queue-header">
-              <div><p className="eyebrow">Operations queue</p><h2>Work orders</h2></div>
-              <div className="queue-tools">
-                <label className="search-box"><Icon name="search" size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search tickets" aria-label="Search tickets" /></label>
-                <label className="filter-box"><Icon name="filter" size={17} /><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as TicketStatus | "All")} aria-label="Filter by status"><option>All</option>{statusOptions.map((status) => <option key={status}>{status}</option>)}</select></label>
-              </div>
-            </div>
-
-            {error && <div className="message error" role="alert">{error}</div>}
-            {notice && <div className="message success" role="status"><Icon name="check" size={17} />{notice}</div>}
-
-            <div className="ticket-list">
-              {loading ? (
-                <div className="empty-state"><div className="loader" /><h3>Loading work orders</h3></div>
-              ) : visibleTickets.length === 0 ? (
-                <div className="empty-state"><div className="empty-icon"><Icon name="check" size={26} /></div><h3>No work orders found</h3><p>Submit a tenant report or adjust the filters to see tickets here.</p></div>
-              ) : visibleTickets.map((ticket) => (
-                <TicketCard key={ticket.id} ticket={ticket} updating={updatingId === ticket.id} onStatusChange={handleStatusChange} />
-              ))}
-            </div>
-          </section>
-        </section>
-      </main>
-      <footer>MaintainIQ prototype <span>•</span> Safety rules verify AI-generated priorities before tickets are saved.</footer>
-    </div>
-  );
+    <IntakeDialog open={intakeOpen} aiConfigured={aiConfigured} onClose={() => setIntakeOpen(false)} onCreated={handleCreated} />
+  </div>;
 }

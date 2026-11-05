@@ -1,6 +1,6 @@
 # AI-Powered Maintenance Ticketing Dashboard
 
-A full-stack prototype that sends unstructured tenant maintenance reports to a real LLM, validates the structured response, applies deterministic safety rules, stores work orders in SQLite, and displays them in a responsive property-operations dashboard.
+A full-stack prototype that turns unstructured caller reports into reviewable maintenance work orders. It uses a real LLM for structured extraction, keeps the original report as the source of truth, requires a human review before persistence, applies deterministic safety rules, and presents the resulting work in a responsive property-operations workspace.
 
 ## Core capabilities
 
@@ -8,6 +8,8 @@ A full-stack prototype that sends unstructured tenant maintenance reports to a r
 - Node.js and Express REST API
 - OpenAI Responses API with strict JSON-schema Structured Outputs
 - Zod validation at the request and LLM-output boundaries
+- Two-stage intake: AI analysis first, explicit human review and commit second
+- Verbatim source-evidence links that are rejected unless they occur in the original report
 - Multiple linked work orders from one tenant report
 - Missing-information flags without invented unit numbers
 - Deterministic emergency escalation for possible gas leaks, fire or sparking, and water contacting electrical equipment
@@ -21,7 +23,7 @@ There is no keyword-parser fallback in the application. If `OPENAI_API_KEY` is a
 ## Architecture
 
 ```text
-React + TypeScript form
+React + TypeScript intake
          |
          v
 Express request validation
@@ -30,16 +32,19 @@ Express request validation
 OpenAI Structured Outputs
          |
          v
-Zod output validation
+Zod output + verbatim-evidence validation
          |
          v
 Deterministic safety escalation
          |
          v
-SQLite persistence --> React dashboard and status updates
+Human review/edit
+         |
+         v
+SQLite persistence --> React workspace and status updates
 ```
 
-One source report is inserted into `reports`. Each extracted issue is inserted into `tickets` with the same `report_id`, which preserves the relationship between multiple tickets generated from one call.
+`POST /api/intake/analyze` creates a short-lived, in-memory review session and does not write to SQLite. After the user reviews or corrects every extracted issue, `POST /api/intake/:analysisId/commit` revalidates the data and safety rules, inserts the source report once, and inserts each issue into `tickets` with the same `report_id`.
 
 ## Requirements
 
@@ -135,9 +140,9 @@ The live suite deliberately skips when no key exists; it never substitutes fixed
 }
 ```
 
-### Submit a tenant report
+### Analyze a caller report
 
-`POST /api/reports`
+`POST /api/intake/analyze`
 
 ```json
 {
@@ -145,7 +150,13 @@ The live suite deliberately skips when no key exists; it never substitutes fixed
 }
 ```
 
-The response can contain multiple tickets linked by one `reportId`.
+The response contains an `analysisId`, the untouched original report, and one or more editable ticket candidates. It does not persist anything.
+
+### Commit reviewed work orders
+
+`POST /api/intake/:analysisId/commit`
+
+Send the reviewed `tickets` array returned by the analysis call. The server reapplies validation and safety rules before storing the report and linked work orders. Review sessions expire after 15 minutes and are intentionally not durable.
 
 ### List work orders
 
@@ -167,7 +178,7 @@ Allowed values are `New`, `In Progress`, and `Done`.
 
 The LLM receives an explicit instruction to treat the tenant report as untrusted data, ignore commands inside it, split distinct maintenance issues, avoid guessing missing facts, and return only the required schema.
 
-The model response must satisfy both strict JSON Schema and Zod. Before persistence, deterministic rules override unsafe classifications:
+The model response must satisfy both strict JSON Schema and Zod. Any claimed evidence is retained only when it is an exact substring of the original report; unsupported evidence becomes `null`. Before persistence, deterministic rules override unsafe classifications:
 
 - Possible gas or propane leaks become `Gas/Safety` and `Emergency`.
 - Smoke, sparking, or fire indicators become `Emergency`.
@@ -183,12 +194,12 @@ Executed on November 5, 2026:
 | --- | --- |
 | TypeScript type check | Passed |
 | Production Vite build | Passed |
-| Automated test files | 3 passed, 1 skipped |
-| Automated test cases | 11 passed, 5 skipped |
+| Automated test files | 4 passed, 1 skipped |
+| Automated test cases | 14 passed, 5 skipped |
 | Five-report controlled pipeline suite | 5 passed |
 | Live OpenAI five-report suite | 5 skipped because no API key was available |
 | Missing-key API behavior | Verified `503 LLM_NOT_CONFIGURED` |
-| Responsive UI review | Passed on desktop and mobile layouts |
+| Responsive UI review | Passed on desktop and mobile layouts after correcting a narrow-screen intake overflow |
 
 The five controlled tests exercise API validation, safety escalation, multiple-ticket persistence, missing-information handling, and default status using an injected test double. They do not claim to measure model quality. The separate live suite is the authoritative LLM test and must be run with a real key before submission results are recorded.
 
@@ -201,10 +212,12 @@ See [WALKTHROUGH.md](./WALKTHROUGH.md) for the written walkthrough and submissio
 - Request bodies are size-limited and validated.
 - Reports are treated as untrusted model input.
 - LLM output is schema-constrained and validated again with Zod.
+- Model-provided source evidence must match the original report verbatim.
+- AI analysis is never persisted until a user commits the reviewed result.
 - SQL statements use bound parameters.
 - Provider failures return sanitized client messages.
 - Express technology headers are disabled.
 
 ## Intentional prototype scope
 
-Authentication, work-order assignment, notifications, audit history, production migrations, and voice ingestion are outside the core test scope. Voice input should only be added after the live LLM suite passes.
+Authentication, work-order assignment, notifications, audit history, production migrations, durable review sessions, and voice ingestion are outside the core test scope. Voice input should only be added after the live LLM suite passes.

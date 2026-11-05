@@ -83,13 +83,29 @@ describe("five client report pipeline contracts", () => {
         database,
         extractor: async () => ({
           processingMode: "openai",
-          tickets: controlledExtractions[id],
+          tickets: controlledExtractions[id].map((ticket) => ({
+            ...ticket,
+            source_evidence: {
+              issue_type: null,
+              priority: null,
+              unit_number: null,
+              description: null,
+            },
+          })),
         }),
       });
 
-      const response = await request(app)
-        .post("/api/reports")
+      const analyzed = await request(app)
+        .post("/api/intake/analyze")
         .send({ report: reportText })
+        .expect(200);
+
+      const beforeCommit = await request(app).get("/api/tickets").expect(200);
+      expect(beforeCommit.body.tickets).toHaveLength(0);
+
+      const response = await request(app)
+        .post(`/api/intake/${analyzed.body.analysisId}/commit`)
+        .send({ tickets: analyzed.body.tickets })
         .expect(201);
 
       const tickets = response.body.tickets;

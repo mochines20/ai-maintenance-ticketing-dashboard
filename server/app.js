@@ -14,8 +14,14 @@ import {
   LlmProviderError,
 } from "./services/extractor.js";
 import { applySafetyRules } from "./services/safety-rules.js";
+import { validateSourceEvidence } from "./services/source-evidence.js";
+import { createPendingAnalysisStore } from "./pending-analyses.js";
 
-export function createApp({ database, extractor = extractReport }) {
+export function createApp({
+  database,
+  extractor = extractReport,
+  analysisStore = createPendingAnalysisStore(),
+}) {
   const app = express();
   app.disable("x-powered-by");
   app.use(cors({ origin: true }));
@@ -36,21 +42,60 @@ export function createApp({ database, extractor = extractReport }) {
     response.json({ tickets: database.listTickets() });
   });
 
-  app.post("/api/reports", async (request, response, next) => {
+  app.post("/api/intake/analyze", async (request, response, next) => {
     try {
       const { report } = reportRequestSchema.parse(request.body);
       const extracted = await extractor(report);
-      const safeTickets = applySafetyRules(report, extracted.tickets);
-      const { tickets } = extractionResultSchema.parse({ tickets: safeTickets });
-      const result = await database.createReportWithTickets({
+      const safeTickets = validateSourceEvidence(
         report,
+        applySafetyRules(report, extracted.tickets),
+      );
+      const { tickets } = extractionResultSchema.parse({ tickets: safeTickets });
+      const analysis = analysisStore.create({
+        report,
+        tickets,
         processingMode: extracted.processingMode || "unknown",
+      });
+
+      response.json({
+        analysisId: analysis.id,
+        createdAt: analysis.createdAt,
+        stage: "review",
+        originalReport: report,
         tickets,
       });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post("/api/intake/:analysisId/commit", async (request, response, next) => {
+    try {
+      const analysis = analysisStore.get(request.params.analysisId);
+      if (!analysis) {
+        return response.status(404).json({
+          error: "This review session was not found or has expired. Analyze the report again.",
+          code: "ANALYSIS_NOT_FOUND",
+        });
+      }
+
+      const reviewed = extractionResultSchema.parse(request.body);
+      const safeTickets = validateSourceEvidence(
+        analysis.report,
+        applySafetyRules(analysis.report, reviewed.tickets),
+      );
+      const { tickets } = extractionResultSchema.parse({ tickets: safeTickets });
+      const result = await database.createReportWithTickets({
+        report: analysis.report,
+        processingMode: analysis.processingMode,
+        tickets,
+      });
+      analysisStore.remove(request.params.analysisId);
 
       response.status(201).json({
         ...result,
-        processingMode: extracted.processingMode || "unknown",
+        processingMode: analysis.processingMode,
+        stage: "created",
       });
     } catch (error) {
       next(error);

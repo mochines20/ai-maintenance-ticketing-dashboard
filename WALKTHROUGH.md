@@ -2,18 +2,23 @@
 
 ## What the prototype does
 
-The application accepts a caller or tenant maintenance report, sends it to OpenAI for structured extraction, validates the result, applies deterministic safety rules, and writes one or more work orders to SQLite. The dashboard then shows the tickets with priority, follow-up state, unit number, timestamps, and an editable workflow status.
+The application accepts a caller or tenant maintenance report, sends it to OpenAI for structured extraction, and presents the result beside the original report for human review. The reviewer can correct fields, add a missed issue, remove an extra issue, and inspect the exact source phrase behind an extracted value. Only an explicit commit writes one or more linked work orders to SQLite. The workspace then shows priority, follow-up state, unit number, timestamps, original context, and editable status.
 
 ## Request flow
 
-1. The React and TypeScript form sends the report to `POST /api/reports`.
+1. The React and TypeScript intake sends the report to `POST /api/intake/analyze`.
 2. Zod validates and sanitizes the input.
 3. The backend calls the OpenAI Responses API using strict JSON-schema Structured Outputs.
-4. Zod validates the model result independently of the provider schema.
+4. Zod validates the model result independently of the provider schema, and claimed evidence is kept only when it appears verbatim in the report.
 5. Safety rules escalate possible gas leaks and dangerous electrical conditions.
-6. The source report is saved once, and each extracted issue is saved as a linked ticket.
-7. Tickets appear in the dashboard with default status `New`.
-8. A property manager can change status to `In Progress` or `Done`.
+6. The analysis is held in a 15-minute in-memory review session; SQLite remains unchanged.
+7. The user reviews or edits the issues and sends them to `POST /api/intake/:analysisId/commit`.
+8. The server revalidates the reviewed data and safety rules, saves the source report once, and saves every issue as a linked ticket with default status `New`.
+9. A property manager can search, filter, inspect the source report, and change status to `In Progress` or `Done`.
+
+## Workspace design
+
+The interface is intentionally a work surface rather than a decorative dashboard: warm neutral background, low-saturation semantic color, compact operational type, a four-card summary, a prioritized queue, and a persistent ticket inspector. The intake becomes a contextual two-panel workspace so the original words and structured extraction remain visible together. Motion is limited to short state transitions and respects `prefers-reduced-motion`.
 
 ## Handling important edge cases
 
@@ -28,6 +33,14 @@ The response schema contains a `tickets` array. A mixed plumbing and electrical 
 ### Understated urgency
 
 The model's classification is not the final safety decision. A deterministic post-processing layer checks the original report and extracted description. Possible gas odors and water contacting electrical equipment are forced to `Emergency`, even when the caller says the situation is probably not serious.
+
+### Unsupported AI evidence
+
+The extraction schema asks the model for short source phrases for issue type, priority, unit, and description. The server compares each phrase with the untouched report and replaces it with `null` unless it is present verbatim. The UI can therefore highlight only real source text and never manufactured evidence.
+
+### Review before persistence
+
+Analysis and persistence are separate API actions. This prevents an unreviewed extraction from entering the work queue and allows normal corrections without editing the original caller report. Commit re-runs validation and deterministic escalation, so a reviewer cannot accidentally downgrade a gas or electrical emergency.
 
 ## Five required scenarios
 
@@ -53,10 +66,10 @@ Results:
 
 - TypeScript type check passed.
 - Production build passed.
-- 11 automated tests passed.
+- 14 automated tests passed across four test files.
 - Five controlled pipeline tests covered all client reports.
-- The API/database/status/safety-rule tests passed.
-- The dashboard was visually inspected in desktop and mobile layouts.
+- The API/database/status/safety-rule and source-evidence tests passed.
+- The dashboard and contextual intake were visually inspected in desktop and mobile layouts.
 - The missing-key path was exercised and correctly returned `503 LLM_NOT_CONFIGURED`.
 
 ## Verification not performed
@@ -81,6 +94,8 @@ Record the resulting five outputs and update this walkthrough before final submi
 - [x] Multiple linked tickets
 - [x] Missing-information handling
 - [x] Deterministic emergency escalation
+- [x] Human review before database persistence
+- [x] Verbatim source-evidence validation and highlighting
 - [x] Responsive dashboard and status updates
 - [x] Automated tests for the full non-network pipeline
 - [x] Conditional live tests for all five client reports
