@@ -313,6 +313,7 @@ export default function App() {
   const [kpis, setKpis] = useState<DashboardSummary>({ openWorkOrders: 0, openEmergencies: 0, needsFollowUp: 0, completedWorkOrders: 0 });
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
+  const [ticketsLoadFailed, setTicketsLoadFailed] = useState(false);
   const [updatingId, setUpdatingId] = useState<number | null>(null);
   const [aiConfigured, setAiConfigured] = useState<boolean | null>(null);
   const [intakeOpen, setIntakeOpen] = useState(false);
@@ -329,9 +330,11 @@ export default function App() {
       const [ticketData, summaryData] = await Promise.all([getTickets(), getDashboardSummary()]);
       setTickets(ticketData.tickets);
       setKpis(summaryData.summary);
+      setTicketsLoadFailed(false);
       setSelectedId((current) => preferredId ?? current ?? ticketData.tickets[0]?.id ?? null);
       setError("");
     } catch (loadError) {
+      setTicketsLoadFailed(true);
       setError(errorMessage(loadError));
     } finally {
       setLoading(false);
@@ -385,6 +388,10 @@ export default function App() {
     window.setTimeout(() => setRecentIds(new Set()), 1800);
   }
 
+  function handleRetry() {
+    void loadTickets();
+  }
+
   return <div className="app-shell">
     <header className="app-header">
       <a className="brand" href="#workspace" aria-label="Maintenance Desk workspace"><span className="brand-mark"><Icon name="building" size={19} /></span><span><strong>Maintenance Desk</strong><small>The living workspace</small></span></a>
@@ -397,15 +404,15 @@ export default function App() {
 
       <section className="kpi-grid" aria-label="Maintenance summary"><KpiCard label="Open work orders" value={kpis.openWorkOrders} icon="clipboard" /><KpiCard label="Open emergencies" value={kpis.openEmergencies} icon="alert" tone="risk" /><KpiCard label="Needs follow-up" value={kpis.needsFollowUp} icon="follow" tone="warning" /><KpiCard label="Completed work orders" value={kpis.completedWorkOrders} icon="check" tone="complete" /></section>
 
-      {error && <div className="page-message error" role="alert"><Icon name="alert" size={16} />{error}</div>}
+      {error && <div className="page-message error" role="alert"><Icon name="alert" size={16} /><span>{error}</span><button type="button" className="retry-button" onClick={handleRetry}>Retry</button></div>}
       {notice && <div className="page-message success" role="status"><Icon name="check" size={16} />{notice}</div>}
 
       <section className="operations-grid" ref={queueRef}>
         <section className="attention-surface">
           <header className="surface-header"><div><span className="section-kicker">Prioritized work</span><h2>Attention queue</h2><p>{visibleTickets.length} of {tickets.length} work orders · Emergency first, then oldest request</p></div><div className="queue-controls"><label><span className="sr-only">Filter by status</span><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as typeof statusFilter)}><option>All</option><option>Open</option>{statusOptions.map((status) => <option key={status}>{status}</option>)}</select></label><label><span className="sr-only">Sort work orders</span><select value={sort} onChange={(event) => setSort(event.target.value as typeof sort)}><option value="attention">Emergency first · FIFO</option><option value="newest">Newest first</option><option value="unit">Unit number</option></select></label></div></header>
 
-          <div className="table-wrap">
-            {loading ? <div className="queue-empty"><span className="button-spinner dark" /><h3>Loading work orders</h3></div> : visibleTickets.length === 0 ? <div className="queue-empty"><span><Icon name="check" size={24} /></span><h3>No matching work orders</h3><p>{tickets.length === 0 ? "Analyze a caller report to create the first work order." : "Try a different search or status filter."}</p><button type="button" onClick={() => setIntakeOpen(true)}>Create new report</button></div> : <table className="work-order-table"><thead><tr><th>Work order</th><th>Unit</th><th>Priority</th><th>Status</th><th>Updated</th><th><span className="sr-only">Open</span></th></tr></thead><tbody>{visibleTickets.map((ticket) => <tr key={ticket.id} className={`${selectedId === ticket.id ? "selected" : ""} ${recentIds.has(ticket.id) ? "new-row" : ""}`} onClick={() => setSelectedId(ticket.id)} tabIndex={0} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setSelectedId(ticket.id); } }}><td><div className="order-primary"><strong>WO-{String(ticket.id).padStart(4, "0")}</strong>{ticket.missing_information && <span className="followup-dot" title="Needs follow-up"><Icon name="follow" size={13} /></span>}</div><span>{ticket.issue_type}</span><p>{ticket.description}</p></td><td>{ticket.unit_number || <span className="not-provided">Not provided</span>}</td><td><PriorityBadge priority={ticket.priority} /></td><td><span className={`status-pill status-${ticket.status.toLowerCase().replace(" ", "-")}`}>{ticket.status}</span></td><td>{formatDate(ticket.updated_at)}</td><td><Icon name="chevron" size={15} /></td></tr>)}</tbody></table>}
+          <div className={`table-wrap ${visibleTickets.length > 10 ? "table-wrap-scroll" : ""}`}>
+            {loading ? <div className="queue-empty"><span className="button-spinner dark" /><h3>Loading work orders</h3></div> : ticketsLoadFailed && tickets.length === 0 ? <div className="queue-empty queue-error"><span><Icon name="alert" size={24} /></span><h3>Work orders unavailable</h3><p>We couldn't load the queue. Retry the request to try again.</p><button type="button" onClick={handleRetry}>Retry</button></div> : visibleTickets.length === 0 ? <div className="queue-empty"><span><Icon name="check" size={24} /></span><h3>No matching work orders</h3><p>{tickets.length === 0 ? "Analyze a caller report to create the first work order." : "Try a different search or status filter."}</p><button type="button" onClick={() => setIntakeOpen(true)}>Create new report</button></div> : <table className="work-order-table"><thead><tr><th>Work order</th><th>Unit</th><th>Priority</th><th>Status</th><th>Updated</th><th><span className="sr-only">Open</span></th></tr></thead><tbody>{visibleTickets.map((ticket) => <tr key={ticket.id} className={`${selectedId === ticket.id ? "selected" : ""} ${recentIds.has(ticket.id) ? "new-row" : ""}`} onClick={() => setSelectedId(ticket.id)} tabIndex={0} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setSelectedId(ticket.id); } }}><td><div className="order-primary"><strong>WO-{String(ticket.id).padStart(4, "0")}</strong>{ticket.missing_information && <span className="followup-dot" title="Needs follow-up"><Icon name="follow" size={13} /></span>}</div><span>{ticket.issue_type}</span><p>{ticket.description}</p></td><td>{ticket.unit_number || <span className="not-provided">Not provided</span>}</td><td><PriorityBadge priority={ticket.priority} /></td><td><span className={`status-pill status-${ticket.status.toLowerCase().replace(" ", "-")}`}>{ticket.status}</span></td><td>{formatDate(ticket.updated_at)}</td><td><Icon name="chevron" size={15} /></td></tr>)}</tbody></table>}
           </div>
         </section>
 

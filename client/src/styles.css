@@ -76,7 +76,7 @@ button, input, textarea, select { transition: border-color 180ms var(--ease), ba
 .page-message.success { color: #286c4a; border-color: #cce7d6; background: var(--green-soft); }
 @keyframes messageIn { from { opacity: 0; transform: translateY(-4px); } }
 
-.operations-grid { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; align-items: start; }
+.operations-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 30%); gap: 16px; align-items: start; }
 .attention-surface, .inspector { border: 1px solid var(--line); border-radius: 16px; background: var(--surface); box-shadow: var(--shadow); }
 .attention-surface { min-width: 0; overflow: hidden; }
 .surface-header { min-height: 84px; padding: 18px 20px; display: flex; align-items: center; justify-content: space-between; gap: 20px; border-bottom: 1px solid var(--line); }
@@ -85,7 +85,8 @@ button, input, textarea, select { transition: border-color 180ms var(--ease), ba
 .queue-controls { display: flex; align-items: center; gap: 7px; }
 .queue-controls select { height: 34px; padding: 0 28px 0 10px; border: 1px solid var(--line); border-radius: 8px; outline: 0; color: #475467; background: var(--surface-soft); font-size: 10px; font-weight: 700; }
 .queue-controls select:hover { border-color: #b7c0b8; }
-.table-wrap { min-height: 480px; overflow-x: auto; }
+.table-wrap { overflow-x: auto; }
+.table-wrap-scroll { max-height: 640px; overflow: auto; }
 .work-order-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
 .work-order-table th { padding: 10px 14px; color: #7c8796; background: #fafbfa; font-size: 8px; font-weight: 900; text-align: left; text-transform: uppercase; letter-spacing: .12em; }
 .work-order-table th:first-child { width: 38%; padding-left: 20px; }
@@ -115,13 +116,17 @@ button, input, textarea, select { transition: border-color 180ms var(--ease), ba
 .status-pill { padding: 4px 7px; border-radius: 999px; color: #526070; background: #edf0ed; font-size: 8px; font-weight: 850; white-space: nowrap; }
 .status-in-progress { color: #355d9c; background: #eaf0fb; }
 .status-done { color: #2e704f; background: var(--green-soft); }
-.queue-empty { min-height: 420px; padding: 30px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+.queue-empty { min-height: 220px; padding: 30px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
 .queue-empty > span:not(.button-spinner) { width: 46px; height: 46px; display: grid; place-items: center; border-radius: 50%; color: var(--green); background: var(--mint); }
 .queue-empty h3 { margin: 13px 0 4px; font-size: 14px; }
 .queue-empty p { max-width: 330px; margin: 0; color: var(--muted); font-size: 11px; line-height: 1.55; }
 .queue-empty button { margin-top: 14px; padding: 8px 11px; border: 1px solid var(--line); border-radius: 8px; color: var(--ink); background: white; font-size: 10px; font-weight: 800; }
+.queue-empty.queue-error > span:not(.button-spinner) { color: var(--red); background: var(--red-soft); }
+.queue-empty.queue-error button, .retry-button { border: 0; color: white; background: var(--blue); }
+.retry-button { margin-left: auto; padding: 6px 10px; border-radius: 7px; font-size: 11px; font-weight: 800; }
+.retry-button:hover, .queue-empty.queue-error button:hover { background: var(--blue-dark); }
 
-.inspector { position: sticky; top: 80px; min-height: 480px; padding: 20px; animation: inspectorIn 200ms var(--ease); }
+.inspector { position: sticky; top: 80px; padding: 20px; animation: inspectorIn 200ms var(--ease); }
 @keyframes inspectorIn { from { opacity: .4; transform: translateX(4px); } }
 .inspector-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-bottom: 16px; border-bottom: 1px solid var(--line); }
 .inspector-followup { margin: 14px 0 0; padding: 10px; display: flex; align-items: center; gap: 9px; border: 1px solid #f0d7ae; border-radius: 9px; color: var(--amber); background: var(--amber-soft); }
