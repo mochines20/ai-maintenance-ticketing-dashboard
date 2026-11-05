@@ -31,9 +31,11 @@ export function createApp({
     response.json({
       status: "ok",
       ai: {
-        configured: Boolean(config.openaiApiKey),
-        provider: "openai",
-        model: config.openaiModel,
+        configured: config.aiProvider === "gemini"
+          ? Boolean(config.geminiApiKey)
+          : Boolean(config.openaiApiKey),
+        provider: config.aiProvider,
+        model: config.aiProvider === "gemini" ? config.geminiModel : config.openaiModel,
       },
     });
   });
@@ -131,7 +133,7 @@ export function createApp({
   app.use((error, _request, response, _next) => {
     if (error instanceof LlmConfigurationError) {
       return response.status(503).json({
-        error: "AI extraction is not configured. Add OPENAI_API_KEY to .env and restart the server.",
+        error: "AI extraction is not configured. Configure the selected provider on the server and restart.",
         code: error.code,
       });
     }

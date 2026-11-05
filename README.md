@@ -6,7 +6,7 @@ A full-stack prototype that turns unstructured caller reports into reviewable ma
 
 - React, Vite, and TypeScript frontend
 - Node.js and Express REST API
-- OpenAI Responses API with strict JSON-schema Structured Outputs
+- Gemini Generate Content API with JSON-schema structured responses (OpenAI remains supported as an optional provider)
 - Zod validation at the request and LLM-output boundaries
 - Two-stage intake: AI analysis first, explicit human review and commit second
 - Verbatim source-evidence links that are rejected unless they occur in the original report
@@ -18,7 +18,7 @@ A full-stack prototype that turns unstructured caller reports into reviewable ma
 - Automated API, persistence, safety-rule, and five-report contract tests
 - Conditional live-LLM tests covering all five client reports
 
-There is no keyword-parser fallback in the application. If `OPENAI_API_KEY` is absent, ticket creation returns a clear `503 LLM_NOT_CONFIGURED` response instead of fabricating AI results.
+There is no keyword-parser fallback in the application. If the selected provider key is absent, ticket creation returns a clear `503 LLM_NOT_CONFIGURED` response instead of fabricating AI results.
 
 ## Architecture
 
@@ -29,7 +29,7 @@ React + TypeScript intake
 Express request validation
          |
          v
-OpenAI Structured Outputs
+Gemini / OpenAI structured output
          |
          v
 Zod output + verbatim-evidence validation
@@ -59,9 +59,9 @@ AI analysis is a processing state inside the first stage, not a separate wizard 
 
 - Node.js 20 or newer
 - npm
-- An OpenAI API key with access to the configured model
+- An API key for the configured AI provider
 
-The default model is `gpt-4o-mini`, configurable through `OPENAI_MODEL`.
+The provider is selected with `AI_PROVIDER=gemini` or `AI_PROVIDER=openai`. Gemini defaults to `gemini-2.5-flash`; OpenAI defaults to `gpt-4o-mini`.
 
 ## Installation
 
@@ -90,7 +90,12 @@ Add the real API key to `.env`:
 ```env
 PORT=3001
 DATABASE_PATH=./data/maintenance.sqlite
-OPENAI_API_KEY=your_api_key_here
+AI_PROVIDER=gemini
+GEMINI_API_KEY=your_gemini_key_here
+GEMINI_MODEL=gemini-2.5-flash
+
+# Optional OpenAI alternative
+OPENAI_API_KEY=
 OPENAI_MODEL=gpt-4o-mini
 ```
 
@@ -130,7 +135,7 @@ Run only the five live LLM scenarios after configuring a key:
 npm run test:live-ai
 ```
 
-The live suite deliberately skips when no key exists; it never substitutes fixed outputs for a provider call.
+The live suite is opt-in so ordinary `npm test` never spends provider quota. It never substitutes fixed outputs for a provider call.
 
 ## API
 
@@ -143,8 +148,8 @@ The live suite deliberately skips when no key exists; it never substitutes fixed
   "status": "ok",
   "ai": {
     "configured": true,
-    "provider": "openai",
-    "model": "gpt-4o-mini"
+    "provider": "gemini",
+    "model": "gemini-2.5-flash"
   }
 }
 ```
@@ -204,14 +209,14 @@ Executed on November 6, 2026:
 | TypeScript type check | Passed |
 | Production Vite build | Passed |
 | Automated test files | 4 passed, 1 skipped |
-| Automated test cases | 14 passed, 5 skipped |
+| Automated test cases | 14 passed, 1 skipped |
 | Five-report controlled pipeline suite | 5 passed |
-| Live OpenAI five-report suite | 5 skipped because no API key was available |
+| Live Gemini provider check | One real extraction passed; remaining five-report calls were blocked by the supplied key's Gemini free-tier quota |
 | Missing-key API behavior | Verified `503 LLM_NOT_CONFIGURED` |
 | Responsive UI review | Passed on desktop and mobile layouts; compact intake and review workspace checked after refinement |
 | Keyboard and interaction QA | Sample selector, Ctrl/Cmd+Enter hint, safe Escape behavior, focus transition, and no browser console errors verified |
 
-The five controlled tests exercise API validation, safety escalation, multiple-ticket persistence, missing-information handling, and default status using an injected test double. They do not claim to measure model quality. The separate live suite is the authoritative LLM test and must be run with a real key before submission results are recorded.
+The five controlled tests exercise API validation, safety escalation, multiple-ticket persistence, missing-information handling, and default status using an injected test double. They do not claim to measure model quality. The separate live suite is the authoritative LLM test. This implementation made a real Gemini call successfully, but the supplied key then reached its free-tier request quota before all five live scenarios could complete.
 
 See [WALKTHROUGH.md](./WALKTHROUGH.md) for the written walkthrough and submission checklist.
 

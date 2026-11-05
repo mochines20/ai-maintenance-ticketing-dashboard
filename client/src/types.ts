@@ -1,5 +1,6 @@
 export type Priority = "Low" | "Medium" | "High" | "Emergency";
 export type TicketStatus = "New" | "In Progress" | "Done";
+export type AiProvider = "openai" | "gemini";
 export type IssueType = "Plumbing" | "Electrical" | "HVAC" | "Gas/Safety" | "Structural" | "Appliance" | "General" | "Other";
 
 export interface SourceEvidence {
@@ -32,7 +33,7 @@ export interface Ticket {
   created_at: string;
   updated_at: string;
   original_text: string;
-  processing_mode: "openai";
+  processing_mode: AiProvider;
 }
 
 export interface TicketListResponse {
@@ -42,7 +43,7 @@ export interface TicketListResponse {
 export interface CreateReportResponse {
   reportId: number;
   tickets: Ticket[];
-  processingMode: "openai";
+  processingMode: AiProvider;
   stage: "created";
 }
 
@@ -58,7 +59,7 @@ export interface HealthResponse {
   status: "ok";
   ai: {
     configured: boolean;
-    provider: "openai";
+    provider: AiProvider;
     model: string;
   };
 }

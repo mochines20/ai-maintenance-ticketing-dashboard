@@ -11,7 +11,7 @@
     "typecheck": "tsc --noEmit -p client/tsconfig.json",
     "start": "node server/index.js",
     "test": "vitest run --config vitest.config.js",
-    "test:live-ai": "vitest run --config vitest.config.js server/services/extractor.integration.test.js"
+    "test:live-ai": "node scripts/run-live-ai-tests.js"
   },
   "dependencies": {
     "cors": "^2.8.5",
