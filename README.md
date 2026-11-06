@@ -14,7 +14,7 @@ A full-stack prototype that turns unstructured caller reports into reviewable ma
 - Missing-information flags without invented unit numbers
 - Deterministic emergency escalation for possible gas leaks, fire or sparking, and water contacting electrical equipment
 - Persistent SQLite file with timestamps and default `New` status
-- Search, status filters, priority indicators, follow-up badges, and status updates
+- Search, status and priority filters, priority indicators, follow-up badges, and status updates
 - Actionable queue defaults to active work orders; completed records remain available through `All` and `Done`
 - Emergency-first work queue with FIFO ordering for all remaining requests
 - Content-driven queue and inspector sizing, with five-ticket pagination for larger queues
@@ -173,7 +173,7 @@ The live suite is opt-in so ordinary `npm test` never spends provider quota. It 
 
 The response contains an `analysisId`, the untouched original report, and one or more editable ticket candidates. It does not persist anything.
 
-The workspace layout is content-aware: the queue and inspector no longer reserve a fixed 480px height. Empty and small queues stay compact, while larger queues are presented five tickets at a time with Previous/Next pagination. The default queue filter is `Open` so the workspace starts with actionable work; `All` and `Done` preserve access to completed history.
+The workspace layout is content-aware: the queue and inspector no longer reserve a fixed 480px height. Empty and small queues stay compact, while larger queues are presented five tickets at a time with Previous/Next pagination. The default queue filter is `Open` so the workspace starts with actionable work; `All` and `Done` preserve access to completed history. Status, priority, and text search filters can be combined.
 
 ### Commit reviewed work orders
 
@@ -218,6 +218,8 @@ The model response must satisfy both strict JSON Schema and Zod. Any claimed evi
 - Smoke, sparking, or fire indicators become `Emergency`.
 - Water contacting an outlet, wire, panel, or electrical equipment becomes `Emergency`.
 - Loss of heat in freezing conditions becomes at least `High`.
+
+As a narrow extraction safeguard, the server may recover a unit only when an explicit unit token (for example `2D` in “This is 2D”) is present verbatim in the original report. This supplements the LLM response; it does not infer or invent a location. Follow-up flags are normalized from the nullable unit field so a valid extracted priority cannot create a false follow-up indicator.
 - A missing unit number remains `null` and is flagged for follow-up.
 
 ## Test status
@@ -229,14 +231,14 @@ Executed on November 6, 2026:
 | TypeScript type check | Passed |
 | Production Vite build | Passed |
 | Automated test files | 4 passed, 1 skipped |
-| Automated test cases | 17 passed, 1 skipped |
+| Automated test cases | 19 passed, 1 skipped |
 | Five-report controlled pipeline suite | 5 passed |
-| Live Groq provider smoke check | Passed with a synthetic non-tenant report; full five client reports were not sent to an external provider |
+| Live Groq five-report acceptance run | Passed in an isolated temporary database after two targeted extraction safeguards were retested |
 | Missing-key API behavior | Verified `503 LLM_NOT_CONFIGURED` |
 | Responsive UI review | Passed on desktop and mobile layouts; compact intake and review workspace checked after refinement |
 | Keyboard and interaction QA | Sample selector, Ctrl/Cmd+Enter hint, safe Escape behavior, focus transition, and no browser console errors verified |
 
-The five controlled tests exercise API validation, safety escalation, multiple-ticket persistence, missing-information handling, and default status using an injected test double. They do not claim to measure model quality. A real Groq smoke request and localhost analyze request both completed with `processingMode: "groq"` using a synthetic report. The five client reports were intentionally not sent to an external provider because they contain tenant/unit details.
+The deterministic suite exercises API validation, safety escalation, multiple-ticket persistence, missing-information handling, rate-limit messaging, and default status using injected test doubles. The separate acceptance runner sent all five exact client reports through Groq once, persisted them in an isolated temporary database, verified status transitions and KPI reconciliation, and recorded the actual structured outputs in `docs/ACCEPTANCE_TEST_REPORT.md`.
 
 See [WALKTHROUGH.md](./WALKTHROUGH.md) for the written walkthrough and submission checklist.
 

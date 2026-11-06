@@ -18,6 +18,35 @@ Use concise factual descriptions. Return only data matching the supplied schema.
 
 const nullableEvidenceFields = ["issue_type", "priority", "unit_number", "description"];
 
+const explicitUnitPatterns = [
+  /\b(?:apartment|apt\.?|unit|room|suite)\s*#?\s*([0-9]{1,4}[A-Z]|[A-Z][0-9]{1,4})\b/i,
+  /\b(?:i(?:'m| am)\s+in|this is)\s+([0-9]{1,4}[A-Z]|[A-Z][0-9]{1,4})\b/i,
+];
+
+function recoverExplicitUnit(report) {
+  for (const pattern of explicitUnitPatterns) {
+    const match = report.match(pattern);
+    if (match) return { value: match[1], evidence: match[1] };
+  }
+  return null;
+}
+
+function normalizeExplicitUnits(report, tickets) {
+  const explicitUnit = recoverExplicitUnit(report);
+  if (!explicitUnit) return tickets;
+
+  return tickets.map((ticket) => ticket.unit_number
+    ? ticket
+    : {
+        ...ticket,
+        unit_number: explicitUnit.value,
+        source_evidence: {
+          ...ticket.source_evidence,
+          unit_number: ticket.source_evidence?.unit_number || explicitUnit.evidence,
+        },
+      });
+}
+
 function normalizeGeminiOutput(value) {
   return {
     ...value,
@@ -44,6 +73,7 @@ export class LlmProviderError extends Error {
     super(message, options);
     this.name = "LlmProviderError";
     this.code = "LLM_PROVIDER_ERROR";
+    this.status = options?.status ?? options?.cause?.status ?? null;
   }
 }
 
@@ -51,7 +81,7 @@ function parseStructuredExtraction(report, outputText, provider, normalize = (va
   try {
     const parsed = extractionResultSchema.parse(normalize(JSON.parse(outputText)));
     return {
-      tickets: validateSourceEvidence(report, parsed.tickets),
+      tickets: validateSourceEvidence(report, normalizeExplicitUnits(report, parsed.tickets)),
     };
   } catch (error) {
     throw new LlmProviderError(`${provider} returned invalid structured output.`, { cause: error });
@@ -82,7 +112,7 @@ async function extractWithOpenAI(report) {
     return parseStructuredExtraction(report, response.output_text, "OpenAI");
   } catch (error) {
     if (error instanceof LlmProviderError) throw error;
-    throw new LlmProviderError("OpenAI extraction failed.", { cause: error });
+    throw new LlmProviderError("OpenAI extraction failed.", { cause: error, status: error?.status });
   }
 }
 
@@ -117,7 +147,7 @@ async function extractWithGroq(report) {
     return parseStructuredExtraction(report, outputText, "Groq");
   } catch (error) {
     if (error instanceof LlmProviderError) throw error;
-    throw new LlmProviderError("Groq extraction failed.", { cause: error });
+    throw new LlmProviderError("Groq extraction failed.", { cause: error, status: error?.status });
   }
 }
 
@@ -143,7 +173,7 @@ async function extractWithGemini(report) {
     return parseStructuredExtraction(report, outputText, "Gemini", normalizeGeminiOutput);
   } catch (error) {
     if (error instanceof LlmProviderError) throw error;
-    throw new LlmProviderError("Gemini extraction failed.", { cause: error });
+    throw new LlmProviderError("Gemini extraction failed.", { cause: error, status: error?.status });
   }
 }
 

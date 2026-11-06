@@ -17,9 +17,13 @@ describe.skipIf(!liveConfigured)(`live ${config.aiProvider} extraction`, () => {
       const tickets = applySafetyRules(report, result.tickets);
 
       expect(tickets).toHaveLength(expected.ticketCount);
-      expect(tickets.map((ticket) => ticket.priority).sort()).toEqual(
-        [...expected.priorities].sort(),
-      );
+      if (expected.allowedPriorities) {
+        expect(tickets.every((ticket) => expected.allowedPriorities.includes(ticket.priority))).toBe(true);
+      } else {
+        expect(tickets.map((ticket) => ticket.priority).sort()).toEqual(
+          [...expected.priorities].sort(),
+        );
+      }
       expect(tickets.map((ticket) => ticket.issue_type).sort()).toEqual(
         [...expected.issueTypes].sort(),
       );

@@ -14,7 +14,7 @@ The application accepts a caller or tenant maintenance report, sends it to the c
 6. The analysis is held in a 15-minute in-memory review session; SQLite remains unchanged.
 7. The user reviews or edits the issues and sends them to `POST /api/intake/:analysisId/commit`.
 8. The server revalidates the reviewed data and safety rules, saves the source report once, and saves every issue as a linked ticket with default status `New`.
-9. A property manager can search, filter, inspect the source report, and change status to `In Progress` or `Done`.
+9. A property manager can search, filter by status or priority, inspect the source report, and change status to `In Progress` or `Done`.
 
 The review token is consumed after a successful commit, so repeating the same commit cannot create a second copy of the work orders.
 
@@ -22,7 +22,7 @@ The review token is consumed after a successful commit, so repeating the same co
 
 The interface is intentionally a work surface rather than a decorative dashboard: warm neutral background, low-saturation semantic color, readable operational type, a four-card summary, an emergency-first FIFO queue, and a persistent ticket inspector. The queue defaults to active `New`/`In Progress` work orders; completed records remain accessible through the `All` and `Done` filters. Intake now uses two user-facing stages—`Report` and `Review & Create`. The initial modal is compact and contains only the caller report, sample selector, validation feedback, and Analyze action. After analysis it expands into a two-panel review workspace so the original words and structured extraction remain visible together. Motion is limited to short state transitions and respects `prefers-reduced-motion`.
 
-The queue layout is content-driven. The previous `480px` minimum heights on the table wrapper and inspector, plus the `420px` empty-state minimum, caused a single ticket to leave a large blank region. Those forced heights are removed; the empty state uses a compact minimum, and larger queues are paginated in five-ticket batches with Previous/Next controls. A failed queue request is shown as an error state with a Retry action instead of a false zero-ticket state.
+The queue layout is content-driven. The previous `480px` minimum heights on the table wrapper and inspector, plus the `420px` empty-state minimum, caused a single ticket to leave a large blank region. Those forced heights are removed; the empty state uses a compact minimum, and larger queues are paginated in five-ticket batches with Previous/Next controls. Status, priority, and text search filters can be combined. A failed queue request is shown as an error state with a Retry action instead of a false zero-ticket state.
 
 The report field supports `Ctrl+Enter` / `Cmd+Enter` to analyze, while Escape only dismisses an empty entry state (entered text is preserved rather than silently discarded). A successful save reports the actual number of work orders and offers a direct View work orders action.
 
@@ -31,6 +31,8 @@ The report field supports `Ctrl+Enter` / `Cmd+Enter` to analyze, while Escape on
 ### Missing information
 
 The prompt forbids inventing missing facts. `unit_number` is nullable. If it is absent, the ticket stores `null`, sets `missing_information` to `true`, records `unit_number` in `missing_fields`, and displays a follow-up badge.
+
+If the model misses a unit that is explicitly present in the untouched report, a narrow post-processing guard recovers only that exact unit token. It does not infer a location from surrounding context.
 
 ### Multiple issues
 
@@ -72,26 +74,25 @@ Results:
 
 - TypeScript type check passed.
 - Production build passed.
-- 17 automated tests passed across four test files.
-- Five controlled pipeline tests covered all client reports.
+- 19 automated tests passed across four test files; one opt-in live test remains skipped in the ordinary suite.
+- The five exact client reports were run through the live Groq provider in an isolated temporary SQLite database, then reviewed, committed, retrieved, and reconciled.
 - The API/database/status/safety-rule and source-evidence tests passed.
 - The dashboard and compact two-stage intake were visually inspected in desktop and mobile layouts.
 - Sample selection, report preservation on Escape, the reduced two-stage indicator, normal-user AI-unavailable messaging, and browser console output were checked in the live local preview.
 - The missing-key path remains covered and returns `503 LLM_NOT_CONFIGURED` when the selected provider has no key.
-- The previous Gemini key produced one real structured extraction before Google rejected further calls for free-tier quota exhaustion; Groq is now the active local provider.
-- A real Groq smoke extraction and localhost analyze request completed with a synthetic, non-tenant report.
+- A real Groq five-report acceptance run completed with model `openai/gpt-oss-120b`; the initial run exposed two extraction normalization defects, which were fixed and retested successfully.
 
 ## Verification not performed
 
-The live integration suite exists at `server/services/extractor.integration.test.js`. The active provider is now Groq, configured through the server-only `GROQ_API_KEY`. The five client reports were not sent to Groq because they contain tenant/unit details; only the synthetic smoke request was run against the external provider.
+The live integration suite exists at `server/services/extractor.integration.test.js`. The active provider is Groq, configured through the server-only `GROQ_API_KEY`. The acceptance runner covers live extraction plus persistence in isolation; provider timeout, invalid-JSON, and database I/O fault injection remain controlled-test scenarios rather than live failures.
 
-After adding a key, run:
+For the narrower provider-only extraction check, run:
 
 ```bash
 npm run test:live-ai
 ```
 
-Record the resulting five outputs and update this walkthrough before final submission. If a live result differs only in wording but satisfies the required fields and behavior, adjust the assertions conservatively; do not replace the provider call with fixed output.
+The full acceptance evidence is recorded in `docs/ACCEPTANCE_TEST_REPORT.md`. If a future live result differs only in wording but satisfies the required fields and behavior, adjust the assertions conservatively; do not replace the provider call with fixed output.
 
 ## Submission checklist
 
@@ -111,7 +112,7 @@ Record the resulting five outputs and update this walkthrough before final submi
 - [x] README and `.env.example`
 - [x] No secrets or runtime database committed
 - [x] Add a real `GROQ_API_KEY` locally without committing it
-- [ ] Run `npm run test:live-ai` with the active Groq provider after explicitly approving external submission of the five client reports
-- [ ] Record all five live model outputs
+- [x] Run the five exact reports with the active Groq provider in an isolated acceptance database
+- [x] Record all five live model outputs and retest the fixed extraction safeguards
 - [ ] Record a Loom video or use this written walkthrough
 - [ ] Email the public repository link to the recruiter

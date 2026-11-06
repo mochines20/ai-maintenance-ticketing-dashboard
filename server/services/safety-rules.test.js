@@ -45,5 +45,17 @@ describe("applySafetyRules", () => {
     expect(ticket.missing_fields).toContain("unit_number");
     expect(ticket.priority).toBe("High");
   });
+
+  it("keeps follow-up fields aligned with the nullable unit value", () => {
+    const [ticket] = applySafetyRules("Unit 2D has a window issue.", [{
+      ...baseTicket,
+      unit_number: "2D",
+      missing_information: true,
+      missing_fields: ["priority"],
+    }]);
+
+    expect(ticket.missing_information).toBe(false);
+    expect(ticket.missing_fields).toEqual([]);
+  });
 });
 

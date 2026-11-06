@@ -5,12 +5,6 @@ const NO_HEAT_PATTERN = /\b(no heat|heat isn'?t working|heating (?:is )?(?:not|i
 const NEGATED_GAS_PATTERN = /\b(no|not|without|never)\s+(?:any\s+)?(?:gas|propane|smell|odor)\b/i;
 const NEGATED_WATER_PATTERN = /\b(no|not|without|never)\s+(?:any\s+)?(?:water|leak|drip|flood)\w*\b/i;
 
-function addMissingField(ticket, field) {
-  return ticket.missing_fields.includes(field)
-    ? ticket.missing_fields
-    : [...ticket.missing_fields, field];
-}
-
 export function applySafetyRules(report, tickets) {
   return tickets.map((ticket) => {
     const combined = `${report} ${ticket.description}`;
@@ -47,22 +41,12 @@ export function applySafetyRules(report, tickets) {
       next = { ...next, priority: "High" };
     }
 
-    if (!next.unit_number) {
-      next = {
-        ...next,
-        missing_information: true,
-        missing_fields: addMissingField(next, "unit_number"),
-      };
-    } else {
-      const remainingFields = next.missing_fields.filter(
-        (field) => field !== "unit_number",
-      );
-      next = {
-        ...next,
-        missing_information: remainingFields.length > 0,
-        missing_fields: remainingFields,
-      };
-    }
+    const missingFields = next.unit_number ? [] : ["unit_number"];
+    next = {
+      ...next,
+      missing_information: missingFields.length > 0,
+      missing_fields: missingFields,
+    };
 
     return next;
   });

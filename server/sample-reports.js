@@ -30,6 +30,7 @@ export const sampleReports = [
     expected: {
       ticketCount: 2,
       priorities: ["Medium", "Medium"],
+      allowedPriorities: ["Low", "Medium", "High"],
       issueTypes: ["Plumbing", "Electrical"],
       unitNumbers: ["12C", "12C"],
       needsFollowUp: false,

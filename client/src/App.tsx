@@ -320,6 +320,7 @@ export default function App() {
   const [intakeOpen, setIntakeOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"All" | "Open" | TicketStatus>("Open");
+  const [priorityFilter, setPriorityFilter] = useState<"All" | Priority>("All");
   const [sort, setSort] = useState<"attention" | "newest" | "unit">("attention");
   const [queuePage, setQueuePage] = useState(0);
   const [notice, setNotice] = useState("");
@@ -353,6 +354,7 @@ export default function App() {
     const lowerQuery = query.trim().toLocaleLowerCase();
     return tickets
       .filter((ticket) => statusFilter === "All" || (statusFilter === "Open" ? ticket.status !== "Done" : ticket.status === statusFilter))
+      .filter((ticket) => priorityFilter === "All" || ticket.priority === priorityFilter)
       .filter((ticket) => !lowerQuery || `${ticket.description} ${ticket.issue_type} ${ticket.unit_number || ""} ${ticket.original_text}`.toLocaleLowerCase().includes(lowerQuery))
       .sort((a, b) => {
         if (sort === "newest") return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
@@ -363,7 +365,7 @@ export default function App() {
           || new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
           || a.id - b.id;
       });
-  }, [tickets, query, statusFilter, sort]);
+  }, [tickets, query, statusFilter, priorityFilter, sort]);
 
   const queuePageCount = Math.max(1, Math.ceil(visibleTickets.length / queuePageSize));
   const pageTickets = useMemo(
@@ -375,7 +377,7 @@ export default function App() {
 
   useEffect(() => {
     setQueuePage(0);
-  }, [query, statusFilter, sort]);
+  }, [query, statusFilter, priorityFilter, sort]);
 
   useEffect(() => {
     setQueuePage((current) => Math.min(current, queuePageCount - 1));
@@ -434,7 +436,7 @@ export default function App() {
 
       <section className="operations-grid" ref={queueRef}>
         <section className="attention-surface">
-          <header className="surface-header"><div><span className="section-kicker">Prioritized work</span><h2>Attention queue</h2><p>{visibleTickets.length === 0 ? `0 of ${tickets.length}` : `Showing ${pageStart}–${pageEnd} of ${visibleTickets.length}`} work orders · Emergency first, then oldest request</p></div><div className="queue-controls"><label><span className="sr-only">Filter by status</span><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as typeof statusFilter)}><option>All</option><option>Open</option>{statusOptions.map((status) => <option key={status}>{status}</option>)}</select></label><label><span className="sr-only">Sort work orders</span><select value={sort} onChange={(event) => setSort(event.target.value as typeof sort)}><option value="attention">Emergency first · FIFO</option><option value="newest">Newest first</option><option value="unit">Unit number</option></select></label></div></header>
+          <header className="surface-header"><div><span className="section-kicker">Prioritized work</span><h2>Attention queue</h2><p>{visibleTickets.length === 0 ? `0 of ${tickets.length}` : `Showing ${pageStart}–${pageEnd} of ${visibleTickets.length}`} work orders · Emergency first, then oldest request</p></div><div className="queue-controls"><label><span className="sr-only">Filter by status</span><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as typeof statusFilter)}><option>All</option><option>Open</option>{statusOptions.map((status) => <option key={status}>{status}</option>)}</select></label><label><span className="sr-only">Filter by priority</span><select value={priorityFilter} onChange={(event) => setPriorityFilter(event.target.value as typeof priorityFilter)}><option value="All">All priorities</option>{priorityOptions.map((priority) => <option key={priority}>{priority}</option>)}</select></label><label><span className="sr-only">Sort work orders</span><select value={sort} onChange={(event) => setSort(event.target.value as typeof sort)}><option value="attention">Emergency first · FIFO</option><option value="newest">Newest first</option><option value="unit">Unit number</option></select></label></div></header>
 
           <div className="table-wrap">
             {loading ? <div className="queue-empty"><span className="button-spinner dark" /><h3>Loading work orders</h3></div> : ticketsLoadFailed && tickets.length === 0 ? <div className="queue-empty queue-error"><span><Icon name="alert" size={24} /></span><h3>Work orders unavailable</h3><p>We couldn't load the queue. Retry the request to try again.</p><button type="button" onClick={handleRetry}>Retry</button></div> : visibleTickets.length === 0 ? <div className="queue-empty"><span><Icon name="check" size={24} /></span><h3>{tickets.length === 0 ? "No work orders yet" : statusFilter === "Open" ? "No active work orders" : "No matching work orders"}</h3><p>{tickets.length === 0 ? "Analyze a caller report to create the first work order." : statusFilter === "Open" ? "Switch to All or Done to view completed records." : "Try a different search or status filter."}</p><button type="button" onClick={() => setIntakeOpen(true)}>Create new report</button></div> : <table className="work-order-table"><thead><tr><th>Work order</th><th>Unit</th><th>Priority</th><th>Status</th><th>Updated</th><th><span className="sr-only">Open</span></th></tr></thead><tbody>{pageTickets.map((ticket) => <tr key={ticket.id} className={`${selectedId === ticket.id ? "selected" : ""} ${recentIds.has(ticket.id) ? "new-row" : ""}`} onClick={() => setSelectedId(ticket.id)} tabIndex={0} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setSelectedId(ticket.id); } }}><td><div className="order-primary"><strong>WO-{String(ticket.id).padStart(4, "0")}</strong>{ticket.missing_information && <span className="followup-dot" title="Needs follow-up"><Icon name="follow" size={13} /></span>}</div><span>{ticket.issue_type}</span><p>{ticket.description}</p></td><td>{ticket.unit_number || <span className="not-provided">Not provided</span>}</td><td><PriorityBadge priority={ticket.priority} /></td><td><span className={`status-pill status-${ticket.status.toLowerCase().replace(" ", "-")}`}>{ticket.status}</span></td><td>{formatDate(ticket.updated_at)}</td><td><Icon name="chevron" size={15} /></td></tr>)}</tbody></table>}

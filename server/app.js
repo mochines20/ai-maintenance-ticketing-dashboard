@@ -160,6 +160,12 @@ export function createApp({
 
     if (error instanceof LlmProviderError) {
       console.error(error.cause || error);
+      if (error.status === 429) {
+        return response.status(429).json({
+          error: "The AI provider rate limit was reached. Wait a moment and try again.",
+          code: "LLM_RATE_LIMITED",
+        });
+      }
       return response.status(502).json({
         error: "The AI provider could not extract this report. Please try again.",
         code: error.code,

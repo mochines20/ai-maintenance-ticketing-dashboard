@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import request from "supertest";
 import { createApp } from "./app.js";
 import { createDatabase } from "./database.js";
+import { LlmConfigurationError, LlmProviderError } from "./services/extractor.js";
 
 describe("maintenance ticket API", () => {
   let database;
@@ -185,6 +186,28 @@ describe("maintenance ticket API", () => {
       .post("/api/intake/not-a-real-analysis/commit")
       .send({ tickets: [] })
       .expect(404);
+  });
+
+  it("returns actionable provider configuration and rate-limit errors", async () => {
+    const unavailableApp = createApp({
+      database,
+      extractor: async () => { throw new LlmConfigurationError(); },
+    });
+    await request(unavailableApp)
+      .post("/api/intake/analyze")
+      .send({ report: "The kitchen sink is leaking in unit 4B." })
+      .expect(503)
+      .expect(({ body }) => expect(body.code).toBe("LLM_NOT_CONFIGURED"));
+
+    const rateLimitedApp = createApp({
+      database,
+      extractor: async () => { throw new LlmProviderError("rate limited", { status: 429 }); },
+    });
+    await request(rateLimitedApp)
+      .post("/api/intake/analyze")
+      .send({ report: "The kitchen sink is leaking in unit 4B." })
+      .expect(429)
+      .expect(({ body }) => expect(body.code).toBe("LLM_RATE_LIMITED"));
   });
 });
 
