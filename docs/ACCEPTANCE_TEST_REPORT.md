@@ -16,6 +16,20 @@
 - Deterministic run: `npm test` uses injected providers for repeatable API, safety, transaction, status, and contract checks.
 - Browser run: desktop Edge and the in-app browser mobile viewport were inspected against the running localhost application.
 
+## Current working-tree audit rerun
+
+After the post-creation editing enhancement, the complete live runner was executed again on the current working tree at 2026-11-06 00:40 UTC in a fresh temporary SQLite database. Groq returned HTTP 200 for all five analyses and HTTP 201 for all reviewed commits. The actual saved IDs were `1`, `2`, `3–4`, `5`, and `6`; all six records were retrieved after persistence. The outputs were:
+
+| Case | Actual result | Duration |
+| --- | --- | ---: |
+| AT-01 | Plumbing, Emergency, 4B; water/electrical safety reason | 1,820 ms |
+| AT-02 | HVAC, High, null unit; `unit_number` follow-up | 1,458 ms |
+| AT-03 | Plumbing/Medium and Electrical/Medium, both 12C | 3,073 ms |
+| AT-04 | Gas/Safety, Emergency, 7A; gas safety reason | 1,052 ms |
+| AT-05 | Structural, Low, 2D | 1,247 ms |
+
+The isolated database summary matched independent counts at `6 open / 2 emergency / 1 follow-up / 0 done`. The status lifecycle then produced `5 / 1 / 1 / 1`. The post-creation edit regression remained green, including change history, unsafe downgrade protection, stale-update conflict handling, missing-unit recalculation, and multi-issue sibling isolation.
+
 ## B. Requirements traceability matrix
 
 | Requirement | Test IDs | Actual result | Outcome | Evidence |
@@ -161,7 +175,7 @@ npm run build
 node scripts/acceptance-live-run.mjs
 ```
 
-Final automated totals for the acceptance baseline: **4 test files passed, 19 tests passed, 1 opt-in live test skipped**. The subsequent post-creation editing regression added four focused scenarios, bringing the current suite to **23 tests passed, 1 skipped**. The skipped test is the ordinary `npm test` live-suite gate; the acceptance runner separately executed all five live reports and persistence checks.
+Final automated totals: **4 test files passed, 23 tests passed, 1 opt-in live test skipped**. The skipped test is the ordinary `npm test` live-suite gate; the acceptance runner separately executed all five live reports and persistence checks.
 
 Sanitized localhost checks:
 

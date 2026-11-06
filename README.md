@@ -257,9 +257,9 @@ Executed on November 6, 2026:
 | Responsive UI review | Passed on desktop and mobile layouts; compact intake and review workspace checked after refinement |
 | Keyboard and interaction QA | Sample selector, Ctrl/Cmd+Enter hint, safe Escape behavior, focus transition, and no browser console errors verified |
 
-The deterministic suite exercises API validation, safety escalation, multiple-ticket persistence, missing-information handling, rate-limit messaging, and default status using injected test doubles. The separate acceptance runner sent all five exact client reports through Groq once, persisted them in an isolated temporary database, verified status transitions and KPI reconciliation, and recorded the actual structured outputs in `docs/ACCEPTANCE_TEST_REPORT.md`.
+The deterministic suite exercises API validation, safety escalation, multiple-ticket persistence, missing-information handling, rate-limit messaging, post-creation editing, and default status using injected test doubles. The current audit acceptance pass sent each of the five exact client reports once through Groq, persisted them in an isolated temporary database, verified status transitions and KPI reconciliation, and recorded the actual structured outputs in `docs/ACCEPTANCE_TEST_REPORT.md`.
 
-See [WALKTHROUGH.md](./WALKTHROUGH.md) for the written walkthrough and submission checklist.
+See [WALKTHROUGH.md](./WALKTHROUGH.md), [docs/CLIENT_REQUIREMENTS_MATRIX.md](./docs/CLIENT_REQUIREMENTS_MATRIX.md), [docs/CLIENT_WALKTHROUGH.md](./docs/CLIENT_WALKTHROUGH.md), and [docs/SUBMISSION_CHECKLIST.md](./docs/SUBMISSION_CHECKLIST.md) for the written walkthrough, traceability, and submission checklist.
 
 ## Security decisions
 
