@@ -12,6 +12,7 @@ import {
   getDashboardSummary,
   getHealth,
   getTickets,
+  updateTicket,
   updateTicketStatus,
 } from "./api";
 import type {
@@ -295,17 +296,71 @@ interface TicketInspectorProps {
   ticket: Ticket | null;
   updating: boolean;
   onStatusChange: (id: number, status: TicketStatus) => Promise<void>;
+  onEdit: (id: number, update: { issue_type: IssueType; priority: Priority; unit_number: string | null; description: string; updated_at: string }) => Promise<Ticket>;
 }
 
-function TicketInspector({ ticket, updating, onStatusChange }: TicketInspectorProps) {
+function TicketInspector({ ticket, updating, onStatusChange, onEdit }: TicketInspectorProps) {
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [editError, setEditError] = useState("");
+  const [draft, setDraft] = useState({ issue_type: "General" as IssueType, priority: "Medium" as Priority, unit_number: "", description: "", updated_at: "" });
+
+  useEffect(() => {
+    if (!ticket || editing) return;
+    setDraft({
+      issue_type: ticket.issue_type as IssueType,
+      priority: ticket.priority,
+      unit_number: ticket.unit_number || "",
+      description: ticket.description,
+      updated_at: ticket.updated_at,
+    });
+  }, [ticket, editing]);
+
   if (!ticket) return <aside className="inspector empty-inspector"><span><Icon name="clipboard" size={24} /></span><h3>Select a work order</h3><p>Ticket details and the original report will appear here.</p></aside>;
+  const currentTicket = ticket;
+
+  function beginEdit() {
+    setDraft({
+      issue_type: currentTicket.issue_type as IssueType,
+      priority: currentTicket.priority,
+      unit_number: currentTicket.unit_number || "",
+      description: currentTicket.description,
+      updated_at: currentTicket.updated_at,
+    });
+    setEditError("");
+    setEditing(true);
+  }
+
+  function cancelEdit() {
+    setEditError("");
+    setEditing(false);
+  }
+
+  async function saveEdit(event: FormEvent) {
+    event.preventDefault();
+    if (saving) return;
+    setSaving(true);
+    setEditError("");
+    try {
+      await onEdit(currentTicket.id, {
+        ...draft,
+        unit_number: draft.unit_number.trim() || null,
+      });
+      setEditing(false);
+    } catch (saveError) {
+      setEditError(errorMessage(saveError));
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return <aside className="inspector" key={ticket.id}>
-    <div className="inspector-top"><div><span className="section-kicker">Ticket inspector</span><h2>WO-{String(ticket.id).padStart(4, "0")}</h2></div><PriorityBadge priority={ticket.priority} /></div>
+    <div className="inspector-top"><div><span className="section-kicker">Ticket inspector</span><h2>WO-{String(ticket.id).padStart(4, "0")}</h2></div><div className="inspector-top-actions"><PriorityBadge priority={ticket.priority} /><button className="inspector-edit-button" type="button" onClick={beginEdit} disabled={saving}><Icon name="edit" size={14} />Edit ticket</button></div></div>
     {ticket.missing_information && <div className="inspector-followup"><Icon name="follow" size={16} /><div><strong>Needs follow-up</strong><span>{ticket.missing_fields.map((field) => field.replaceAll("_", " ")).join(", ")}</span></div></div>}
     {ticket.safety_reason && <div className="inspector-safety"><Icon name="alert" size={16} /><div><strong>Safety escalation</strong><span>{ticket.safety_reason}</span></div></div>}
-    <section className="inspector-section"><h3>{ticket.description}</h3><dl className="detail-grid"><div><dt>Category</dt><dd>{ticket.issue_type}</dd></div><div><dt>Unit</dt><dd>{ticket.unit_number || "Unit not provided"}</dd></div><div><dt>Created</dt><dd>{formatDate(ticket.created_at)}</dd></div><div><dt>Source report</dt><dd>#{ticket.report_id}</dd></div></dl></section>
+    {editing ? <section className="ticket-edit-panel" aria-labelledby={`edit-ticket-${ticket.id}`}><div className="edit-panel-heading"><div><span className="section-kicker">Post-creation edit</span><h3 id={`edit-ticket-${ticket.id}`}>Correct work order details</h3></div><p>Original caller report stays unchanged.</p></div>{editError && <div className="inline-message error" role="alert"><Icon name="alert" size={15} />{editError}</div>}<form onSubmit={(event) => void saveEdit(event)}><div className="edit-fields"><label><span>Category</span><select value={draft.issue_type} onChange={(event) => setDraft((current) => ({ ...current, issue_type: event.target.value as IssueType }))}>{issueOptions.map((option) => <option key={option}>{option}</option>)}</select></label><label><span>Priority</span><select value={draft.priority} onChange={(event) => setDraft((current) => ({ ...current, priority: event.target.value as Priority }))}>{priorityOptions.map((option) => <option key={option}>{option}</option>)}</select></label><label><span>Unit / location</span><input value={draft.unit_number} onChange={(event) => setDraft((current) => ({ ...current, unit_number: event.target.value }))} placeholder="Unit not provided" /></label><label className="edit-description-field"><span>Summary description</span><textarea value={draft.description} onChange={(event) => setDraft((current) => ({ ...current, description: event.target.value }))} /></label></div><div className="edit-panel-actions"><button className="secondary-action" type="button" onClick={cancelEdit} disabled={saving}>Cancel</button><button className="primary-action" type="submit" disabled={saving}>{saving ? <><span className="button-spinner" />Saving changes</> : <><Icon name="check" size={15} />Save changes</>}</button></div></form></section> : <section className="inspector-section"><h3>{ticket.description}</h3><dl className="detail-grid"><div><dt>Category</dt><dd>{ticket.issue_type}</dd></div><div><dt>Unit</dt><dd>{ticket.unit_number || "Unit not provided"}</dd></div><div><dt>Created</dt><dd>{formatDate(ticket.created_at)}</dd></div><div><dt>Source report</dt><dd>#{ticket.report_id}</dd></div></dl></section>}
     <section className="inspector-section original-report"><div className="inspector-section-title"><Icon name="clipboard" size={15} /><h3>Original report</h3></div><blockquote>{ticket.original_text}</blockquote></section>
-    <section className="inspector-section status-section"><label htmlFor={`status-${ticket.id}`}>Workflow status</label><select id={`status-${ticket.id}`} value={ticket.status} disabled={updating} onChange={(event) => void onStatusChange(ticket.id, event.target.value as TicketStatus)}>{statusOptions.map((status) => <option key={status}>{status}</option>)}</select><p>Priority and follow-up are managed separately from workflow status.</p></section>
+    <section className="inspector-section status-section"><label htmlFor={`status-${ticket.id}`}>Workflow status</label><select id={`status-${ticket.id}`} value={ticket.status} disabled={updating || editing || saving} onChange={(event) => void onStatusChange(ticket.id, event.target.value as TicketStatus)}>{statusOptions.map((status) => <option key={status}>{status}</option>)}</select><p>Priority and follow-up are managed separately from workflow status.</p></section>
   </aside>;
 }
 
@@ -407,6 +462,15 @@ export default function App() {
     }
   }
 
+  async function handleTicketEdit(id: number, update: { issue_type: IssueType; priority: Priority; unit_number: string | null; description: string; updated_at: string }) {
+    const result = await updateTicket(id, update);
+    setTickets((current) => current.map((item) => item.id === id ? result.ticket : item));
+    void loadTickets(id);
+    setNotice(`WO-${String(id).padStart(4, "0")} changes saved.`);
+    window.setTimeout(() => setNotice(""), 2600);
+    return result.ticket;
+  }
+
   function handleCreated(createdTickets: Ticket[]) {
     const ids = new Set(createdTickets.map((ticket) => ticket.id));
     setRecentIds(ids);
@@ -444,7 +508,7 @@ export default function App() {
            {!loading && !ticketsLoadFailed && queuePageCount > 1 && <nav className="queue-pagination" aria-label="Work order pages"><span>Showing {pageStart}–{pageEnd} of {visibleTickets.length}</span><div><button type="button" onClick={() => setQueuePage((current) => Math.max(0, current - 1))} disabled={queuePage === 0}>Previous</button><span aria-current="page">Page {queuePage + 1} of {queuePageCount}</span><button type="button" onClick={() => setQueuePage((current) => Math.min(queuePageCount - 1, current + 1))} disabled={queuePage === queuePageCount - 1}>Next</button></div></nav>}
         </section>
 
-        <TicketInspector ticket={selectedTicket} updating={updatingId === selectedTicket?.id} onStatusChange={handleStatusChange} />
+        <TicketInspector ticket={selectedTicket} updating={updatingId === selectedTicket?.id} onStatusChange={handleStatusChange} onEdit={handleTicketEdit} />
       </section>
     </main>
 

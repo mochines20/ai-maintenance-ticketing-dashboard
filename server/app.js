@@ -7,6 +7,7 @@ import {
   extractionResultSchema,
   reportRequestSchema,
   statusRequestSchema,
+  ticketUpdateSchema,
 } from "./schemas.js";
 import {
   extractReport,
@@ -135,6 +136,54 @@ export function createApp({
       const ticket = await database.updateTicketStatus(id, status);
       if (!ticket) return response.status(404).json({ error: "Ticket not found." });
       return response.json({ ticket });
+    } catch (error) {
+      return next(error);
+    }
+  });
+
+  app.patch("/api/tickets/:id", async (request, response, next) => {
+    try {
+      const id = Number.parseInt(request.params.id, 10);
+      if (!Number.isInteger(id) || id < 1) {
+        return response.status(400).json({ error: "Invalid ticket id." });
+      }
+
+      const current = database.getTicket(id);
+      if (!current) return response.status(404).json({ error: "Ticket not found." });
+
+      const update = ticketUpdateSchema.parse(request.body);
+      const candidate = {
+        ...current,
+        ...Object.fromEntries(
+          ["issue_type", "priority", "unit_number", "description"]
+            .filter((field) => field in update)
+            .map((field) => [field, update[field]]),
+        ),
+      };
+      const safeTicket = applySafetyRules(current.original_text, [candidate])[0];
+      const editableFields = ["issue_type", "priority", "unit_number", "description", "missing_information", "missing_fields", "safety_reason"];
+      const changes = editableFields
+        .filter((field) => JSON.stringify(current[field]) !== JSON.stringify(safeTicket[field]))
+        .map((field) => ({ field, previous: current[field], next: safeTicket[field] }));
+
+      if (changes.length === 0) {
+        return response.json({ ticket: current, changes: { changed_at: null, changed_fields: [] } });
+      }
+
+      const result = await database.updateTicket(id, {
+        expectedUpdatedAt: update.updated_at,
+        fields: safeTicket,
+        changes,
+      });
+      if (!result) return response.status(404).json({ error: "Ticket not found." });
+      if (result.conflict) {
+        return response.status(409).json({
+          error: "This work order changed elsewhere. Review the latest values before saving again.",
+          code: "TICKET_CONFLICT",
+          ticket: result.ticket,
+        });
+      }
+      return response.json(result);
     } catch (error) {
       return next(error);
     }

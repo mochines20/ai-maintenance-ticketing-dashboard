@@ -134,6 +134,10 @@ button, input, textarea, select { transition: border-color 180ms var(--ease), ba
 .inspector { position: sticky; top: 80px; padding: 20px; animation: inspectorIn 200ms var(--ease); }
 @keyframes inspectorIn { from { opacity: .4; transform: translateX(4px); } }
 .inspector-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-bottom: 16px; border-bottom: 1px solid var(--line); }
+.inspector-top-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+.inspector-edit-button { min-height: 30px; padding: 0 9px; display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--line-strong); border-radius: 8px; color: #536172; background: white; font-size: 9px; font-weight: 800; }
+.inspector-edit-button:hover:not(:disabled) { border-color: #9ab2e5; color: var(--blue); background: #f5f8ff; }
+.inspector-edit-button:disabled { cursor: not-allowed; opacity: .55; }
 .inspector-followup { margin: 14px 0 0; padding: 10px; display: flex; align-items: center; gap: 9px; border: 1px solid #f0d7ae; border-radius: 9px; color: var(--amber); background: var(--amber-soft); }
 .inspector-followup div { display: grid; }
 .inspector-followup strong { font-size: 10px; }
@@ -149,6 +153,20 @@ button, input, textarea, select { transition: border-color 180ms var(--ease), ba
 .detail-grid div { min-width: 0; }
 .detail-grid dt { color: #8a94a2; font-size: 8px; font-weight: 900; text-transform: uppercase; letter-spacing: .1em; }
 .detail-grid dd { margin: 4px 0 0; overflow: hidden; color: #384454; font-size: 10px; font-weight: 700; text-overflow: ellipsis; }
+.ticket-edit-panel { padding: 16px 0 18px; border-bottom: 1px solid var(--line); }
+.edit-panel-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 13px; }
+.edit-panel-heading h3 { margin: 3px 0 0; color: var(--ink); font-size: 14px; letter-spacing: -.015em; }
+.edit-panel-heading p { max-width: 125px; margin: 2px 0 0; color: #8a94a2; font-size: 9px; line-height: 1.4; text-align: right; }
+.edit-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.edit-fields label { min-width: 0; }
+.edit-fields label > span { display: block; margin-bottom: 5px; color: #6c7786; font-size: 9px; font-weight: 900; text-transform: uppercase; letter-spacing: .07em; }
+.edit-fields input, .edit-fields select, .edit-fields textarea { width: 100%; border: 1px solid var(--line-strong); border-radius: 8px; outline: 0; color: var(--ink); background: white; font-size: 11px; }
+.edit-fields input, .edit-fields select { height: 36px; padding: 0 9px; }
+.edit-fields textarea { min-height: 78px; padding: 9px; resize: vertical; line-height: 1.45; }
+.edit-description-field { grid-column: 1 / -1; }
+.edit-fields input:focus, .edit-fields select:focus, .edit-fields textarea:focus { border-color: #93abe0; box-shadow: 0 0 0 3px rgba(40, 95, 208, .07); }
+.edit-panel-actions { margin-top: 13px; display: flex; justify-content: flex-end; gap: 8px; }
+.edit-panel-actions .primary-action, .edit-panel-actions .secondary-action { min-height: 34px; font-size: 10px; }
 .inspector-section-title { display: flex; align-items: center; gap: 6px; color: #5e6a79; }
 .inspector-section-title h3 { margin: 0; font-size: 10px; text-transform: uppercase; letter-spacing: .08em; }
 .original-report blockquote { margin: 10px 0 0; padding: 12px; border-left: 2px solid #cfd8e8; border-radius: 0 8px 8px 0; color: #596575; background: var(--surface-soft); font-size: 10px; line-height: 1.6; }
@@ -344,6 +362,10 @@ button, input, textarea, select { transition: border-color 180ms var(--ease), ba
   .intake-dialog { width: 100%; max-height: 100vh; height: 100%; border-radius: 0; }
   .review-fields { grid-template-columns: 1fr; }
   .review-fields .wide-field { grid-column: auto; }
+  .inspector-top { align-items: flex-start; }
+  .inspector-top-actions { align-items: flex-end; flex-direction: column; }
+  .edit-fields { grid-template-columns: 1fr; }
+  .edit-description-field { grid-column: auto; }
   .intake-footer { align-items: stretch; flex-direction: column; }
   .intake-footer p { display: none; }
   .intake-footer > div, .intake-footer button { width: 100%; }

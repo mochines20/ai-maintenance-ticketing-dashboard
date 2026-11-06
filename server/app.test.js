@@ -209,5 +209,129 @@ describe("maintenance ticket API", () => {
       .expect(429)
       .expect(({ body }) => expect(body.code).toBe("LLM_RATE_LIMITED"));
   });
+
+  it("edits saved fields, recalculates follow-up, preserves identity, and records history", async () => {
+    const analyzed = await request(app)
+      .post("/api/intake/analyze")
+      .send({ report: "Unit 4B has a major bathroom ceiling leak." })
+      .expect(200);
+    const created = await request(app)
+      .post(`/api/intake/${analyzed.body.analysisId}/commit`)
+      .send({ tickets: analyzed.body.tickets })
+      .expect(201);
+    const original = created.body.tickets[0];
+
+    const edited = await request(app)
+      .patch(`/api/tickets/${original.id}`)
+      .send({
+        issue_type: "Structural",
+        priority: "Emergency",
+        unit_number: "2D",
+        description: "Bedroom window needs a frame repair.",
+        updated_at: original.updated_at,
+      })
+      .expect(200);
+
+    expect(edited.body.ticket.id).toBe(original.id);
+    expect(edited.body.ticket.report_id).toBe(original.report_id);
+    expect(edited.body.ticket.created_at).toBe(original.created_at);
+    expect(edited.body.ticket.status).toBe("New");
+    expect(edited.body.ticket.issue_type).toBe("Structural");
+    expect(edited.body.ticket.priority).toBe("Emergency");
+    expect(edited.body.ticket.unit_number).toBe("2D");
+    expect(edited.body.ticket.original_text).toContain("Unit 4B");
+    expect(edited.body.changes.changed_fields.map((change) => change.field)).toEqual(
+      expect.arrayContaining(["issue_type", "priority", "unit_number", "description"]),
+    );
+    expect(database.getTicketChanges(original.id)).toHaveLength(1);
+
+    const cleared = await request(app)
+      .patch(`/api/tickets/${original.id}`)
+      .send({ unit_number: null, updated_at: edited.body.ticket.updated_at })
+      .expect(200);
+    expect(cleared.body.ticket.missing_information).toBe(true);
+    expect(cleared.body.ticket.missing_fields).toEqual(["unit_number"]);
+
+    const refilled = await request(app)
+      .patch(`/api/tickets/${original.id}`)
+      .send({ unit_number: "3B", updated_at: cleared.body.ticket.updated_at })
+      .expect(200);
+    expect(refilled.body.ticket.missing_information).toBe(false);
+    expect(refilled.body.ticket.missing_fields).toEqual([]);
+  });
+
+  it("rejects invalid edits and prevents stale concurrent overwrites", async () => {
+    const analyzed = await request(app)
+      .post("/api/intake/analyze")
+      .send({ report: "Unit 4B has a major bathroom ceiling leak." })
+      .expect(200);
+    const created = await request(app)
+      .post(`/api/intake/${analyzed.body.analysisId}/commit`)
+      .send({ tickets: analyzed.body.tickets })
+      .expect(201);
+    const ticket = created.body.tickets[0];
+
+    await request(app)
+      .patch(`/api/tickets/${ticket.id}`)
+      .send({ priority: "Urgent", updated_at: ticket.updated_at })
+      .expect(400);
+
+    const first = await request(app)
+      .patch(`/api/tickets/${ticket.id}`)
+      .send({ description: "Updated description for the leak.", updated_at: ticket.updated_at })
+      .expect(200);
+    const stale = await request(app)
+      .patch(`/api/tickets/${ticket.id}`)
+      .send({ description: "Stale conflicting description.", updated_at: ticket.updated_at })
+      .expect(409);
+    expect(stale.body.code).toBe("TICKET_CONFLICT");
+    expect(first.body.ticket.description).toBe("Updated description for the leak.");
+  });
+
+  it("keeps safety emergencies from being downgraded through editing", async () => {
+    await database.createReportWithTickets({
+      report: "Unit 7A has a gas smell near the stove.",
+      processingMode: "test",
+      tickets: [{
+        issue_type: "Gas/Safety",
+        priority: "Emergency",
+        unit_number: "7A",
+        description: "Possible gas smell near stove.",
+        missing_information: false,
+        missing_fields: [],
+        safety_reason: "Possible gas or propane leak reported.",
+      }],
+    });
+    const ticket = (await request(app).get("/api/tickets").expect(200)).body.tickets[0];
+
+    const response = await request(app)
+      .patch(`/api/tickets/${ticket.id}`)
+      .send({ priority: "Low", issue_type: "General", updated_at: ticket.updated_at })
+      .expect(200);
+    expect(response.body.ticket.priority).toBe("Emergency");
+    expect(response.body.ticket.issue_type).toBe("Gas/Safety");
+  });
+
+  it("edits one ticket without changing its sibling from the same report", async () => {
+    const result = await database.createReportWithTickets({
+      report: "Unit 12C has a clogged sink and flickering hallway light.",
+      processingMode: "test",
+      tickets: [
+        { issue_type: "Plumbing", priority: "Medium", unit_number: "12C", description: "Clogged kitchen sink.", missing_information: false, missing_fields: [] },
+        { issue_type: "Electrical", priority: "Low", unit_number: "12C", description: "Flickering hallway light.", missing_information: false, missing_fields: [] },
+      ],
+    });
+    const [first, second] = result.tickets;
+
+    const edited = await request(app)
+      .patch(`/api/tickets/${first.id}`)
+      .send({ description: "Clogged kitchen sink needs clearing.", updated_at: first.updated_at })
+      .expect(200);
+    const sibling = await request(app).get(`/api/tickets/${second.id}`).expect(200);
+
+    expect(edited.body.ticket.report_id).toBe(second.report_id);
+    expect(sibling.body.ticket.description).toBe("Flickering hallway light.");
+    expect(sibling.body.ticket.priority).toBe("Low");
+  });
 });
 

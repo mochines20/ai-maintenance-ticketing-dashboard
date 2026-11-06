@@ -161,7 +161,7 @@ npm run build
 node scripts/acceptance-live-run.mjs
 ```
 
-Final automated totals: **4 test files passed, 19 tests passed, 1 opt-in live test skipped**. The skipped test is the ordinary `npm test` live-suite gate; the acceptance runner separately executed all five live reports and persistence checks.
+Final automated totals for the acceptance baseline: **4 test files passed, 19 tests passed, 1 opt-in live test skipped**. The subsequent post-creation editing regression added four focused scenarios, bringing the current suite to **23 tests passed, 1 skipped**. The skipped test is the ordinary `npm test` live-suite gate; the acceptance runner separately executed all five live reports and persistence checks.
 
 Sanitized localhost checks:
 

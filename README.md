@@ -15,6 +15,7 @@ A full-stack prototype that turns unstructured caller reports into reviewable ma
 - Deterministic emergency escalation for possible gas leaks, fire or sparking, and water contacting electrical equipment
 - Persistent SQLite file with timestamps and default `New` status
 - Search, status and priority filters, priority indicators, follow-up badges, and status updates
+- Post-creation ticket editing with optimistic conflict protection and lightweight change history
 - Actionable queue defaults to active work orders; completed records remain available through `All` and `Done`
 - Emergency-first work queue with FIFO ordering for all remaining requests
 - Content-driven queue and inspector sizing, with five-ticket pagination for larger queues
@@ -208,6 +209,24 @@ The summary is calculated from persisted SQLite rows (open work orders, open eme
 
 Allowed values are `New`, `In Progress`, and `Done`.
 
+### Edit a saved work order
+
+`PATCH /api/tickets/:id`
+
+Send the editable fields plus the ticket's current `updated_at` value:
+
+```json
+{
+  "issue_type": "Structural",
+  "priority": "Low",
+  "unit_number": "2D",
+  "description": "Bedroom window will not close completely.",
+  "updated_at": "2026-11-06T00:00:00.000Z"
+}
+```
+
+The original report, report relationship, ticket ID, creation timestamp, and workflow status remain unchanged. The server reapplies deterministic safety rules, recalculates missing-unit follow-up, records changed previous/new values, and returns `409 TICKET_CONFLICT` when the ticket was changed after the editor loaded it.
+
 ## Extraction and safety behavior
 
 The LLM receives an explicit instruction to treat the tenant report as untrusted data, ignore commands inside it, split distinct maintenance issues, avoid guessing missing facts, and return only the required schema.
@@ -231,7 +250,7 @@ Executed on November 6, 2026:
 | TypeScript type check | Passed |
 | Production Vite build | Passed |
 | Automated test files | 4 passed, 1 skipped |
-| Automated test cases | 19 passed, 1 skipped |
+| Automated test cases | 23 passed, 1 skipped |
 | Five-report controlled pipeline suite | 5 passed |
 | Live Groq five-report acceptance run | Passed in an isolated temporary database after two targeted extraction safeguards were retested |
 | Missing-key API behavior | Verified `503 LLM_NOT_CONFIGURED` |

@@ -14,9 +14,11 @@ The application accepts a caller or tenant maintenance report, sends it to the c
 6. The analysis is held in a 15-minute in-memory review session; SQLite remains unchanged.
 7. The user reviews or edits the issues and sends them to `POST /api/intake/:analysisId/commit`.
 8. The server revalidates the reviewed data and safety rules, saves the source report once, and saves every issue as a linked ticket with default status `New`.
-9. A property manager can search, filter by status or priority, inspect the source report, and change status to `In Progress` or `Done`.
+9. A property manager can search, filter by status or priority, inspect the source report, edit saved work-order fields, and change status to `In Progress` or `Done`.
 
 The review token is consumed after a successful commit, so repeating the same commit cannot create a second copy of the work orders.
+
+Saved work orders can be corrected from the Ticket Inspector without rerunning the LLM. The edit panel pre-fills category, priority, unit/location, and description; Cancel discards the draft. Save uses the ticket's `updated_at` as an optimistic concurrency token, preserves the original report and current status, reapplies safety rules, recalculates unit follow-up, and records a compact field-level change history.
 
 ## Workspace design
 
@@ -74,7 +76,7 @@ Results:
 
 - TypeScript type check passed.
 - Production build passed.
-- 19 automated tests passed across four test files; one opt-in live test remains skipped in the ordinary suite.
+- 23 automated tests passed across four test files; one opt-in live test remains skipped in the ordinary suite.
 - The five exact client reports were run through the live Groq provider in an isolated temporary SQLite database, then reviewed, committed, retrieved, and reconciled.
 - The API/database/status/safety-rule and source-evidence tests passed.
 - The dashboard and compact two-stage intake were visually inspected in desktop and mobile layouts.

@@ -35,6 +35,16 @@ const schema = `
   CREATE INDEX IF NOT EXISTS idx_tickets_status ON tickets(status);
   CREATE INDEX IF NOT EXISTS idx_tickets_priority ON tickets(priority);
   CREATE INDEX IF NOT EXISTS idx_tickets_created_at ON tickets(created_at);
+
+  CREATE TABLE IF NOT EXISTS ticket_changes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ticket_id INTEGER NOT NULL,
+    changed_at TEXT NOT NULL,
+    changed_fields TEXT NOT NULL,
+    FOREIGN KEY (ticket_id) REFERENCES tickets(id) ON DELETE CASCADE
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_ticket_changes_ticket_id ON ticket_changes(ticket_id);
 `;
 
 function rowsFromStatement(database, sql, params = []) {
@@ -173,6 +183,72 @@ export async function createDatabase({ filename = ":memory:" } = {}) {
     };
   }
 
+  function getTicketChanges(id) {
+    return rowsFromStatement(
+      database,
+      "SELECT id, ticket_id, changed_at, changed_fields FROM ticket_changes WHERE ticket_id = ? ORDER BY id ASC",
+      [id],
+    ).map((row) => ({
+      id: Number(row.id),
+      ticket_id: Number(row.ticket_id),
+      changed_at: row.changed_at,
+      changed_fields: JSON.parse(row.changed_fields || "[]"),
+    }));
+  }
+
+  async function updateTicket(id, { expectedUpdatedAt, fields, changes }) {
+    const current = getTicket(id);
+    if (!current) return null;
+    if (current.updated_at !== expectedUpdatedAt) {
+      return { conflict: true, ticket: current };
+    }
+
+    const timestamp = new Date().toISOString();
+    database.run("BEGIN TRANSACTION");
+    try {
+      database.run(
+        `UPDATE tickets SET
+          issue_type = ?,
+          priority = ?,
+          unit_number = ?,
+          description = ?,
+          missing_information = ?,
+          missing_fields = ?,
+          safety_reason = ?,
+          updated_at = ?
+         WHERE id = ? AND updated_at = ?`,
+        [
+          fields.issue_type,
+          fields.priority,
+          fields.unit_number,
+          fields.description,
+          fields.missing_information ? 1 : 0,
+          JSON.stringify(fields.missing_fields),
+          fields.safety_reason || null,
+          timestamp,
+          id,
+          expectedUpdatedAt,
+        ],
+      );
+
+      if (database.getRowsModified() === 0) {
+        database.run("ROLLBACK");
+        return { conflict: true, ticket: getTicket(id) };
+      }
+
+      database.run(
+        "INSERT INTO ticket_changes (ticket_id, changed_at, changed_fields) VALUES (?, ?, ?)",
+        [id, timestamp, JSON.stringify(changes)],
+      );
+      database.run("COMMIT");
+      await persist();
+      return { ticket: getTicket(id), changes: { changed_at: timestamp, changed_fields: changes } };
+    } catch (error) {
+      database.run("ROLLBACK");
+      throw error;
+    }
+  }
+
   async function updateTicketStatus(id, status) {
     const timestamp = new Date().toISOString();
     database.run(
@@ -189,7 +265,9 @@ export async function createDatabase({ filename = ":memory:" } = {}) {
     createReportWithTickets,
     listTickets,
     getTicket,
+    getTicketChanges,
     getDashboardSummary,
+    updateTicket,
     updateTicketStatus,
     async close() {
       await persist();

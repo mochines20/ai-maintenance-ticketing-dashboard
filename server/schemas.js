@@ -47,6 +47,17 @@ export const statusRequestSchema = z.object({
   status: z.enum(STATUSES),
 });
 
+export const ticketUpdateSchema = z.object({
+  issue_type: z.enum(ISSUE_TYPES).optional(),
+  priority: z.enum(PRIORITIES).optional(),
+  unit_number: z.string().trim().min(1).max(30).nullable().optional(),
+  description: z.string().trim().min(8).max(500).optional(),
+  updated_at: z.string().datetime({ offset: true }),
+}).strict().refine(
+  (value) => Object.keys(value).some((key) => key !== "updated_at"),
+  { message: "At least one editable ticket field is required." },
+);
+
 export const extractionJsonSchema = {
   type: "object",
   additionalProperties: false,

@@ -38,6 +38,28 @@ export interface Ticket {
   processing_mode: AiProvider;
 }
 
+export interface TicketUpdate {
+  issue_type: IssueType;
+  priority: Priority;
+  unit_number: string | null;
+  description: string;
+  updated_at: string;
+}
+
+export interface TicketChange {
+  field: string;
+  previous: unknown;
+  next: unknown;
+}
+
+export interface TicketUpdateResponse {
+  ticket: Ticket;
+  changes: {
+    changed_at: string | null;
+    changed_fields: TicketChange[];
+  };
+}
+
 export interface TicketListResponse {
   tickets: Ticket[];
 }

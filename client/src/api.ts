@@ -7,6 +7,8 @@ import type {
   Ticket,
   TicketListResponse,
   TicketStatus,
+  TicketUpdate,
+  TicketUpdateResponse,
 } from "./types";
 
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
@@ -57,5 +59,16 @@ export function updateTicketStatus(
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ status }),
+  });
+}
+
+export function updateTicket(
+  id: number,
+  update: TicketUpdate,
+): Promise<TicketUpdateResponse> {
+  return request<TicketUpdateResponse>(`/api/tickets/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(update),
   });
 }
