@@ -76,7 +76,7 @@ function PriorityBadge({ priority }: { priority: Priority }) {
   return <span className={`priority-chip priority-${priority.toLowerCase()}`}>{priority === "Emergency" && <Icon name="alert" size={13} />}{priority}</span>;
 }
 
-function KpiCard({ label, value, icon, tone }: { label: string; value: number; icon: IconName; tone?: string }) {
+function KpiCard({ label, value, icon, tone }: { label: string; value: number | string; icon: IconName; tone?: string }) {
   return <article className={`kpi-card ${tone || ""}`}><span className="kpi-icon"><Icon name={icon} /></span><div><strong>{value}</strong><p>{label}</p></div></article>;
 }
 
@@ -427,7 +427,7 @@ export default function App() {
     <main id="workspace" className="workspace">
       <section className="workspace-heading"><div><span className="section-kicker">Property operations</span><h1>Maintenance workspace</h1><p>Review what needs attention, understand the source, and move work forward.</p></div><button className="mobile-new-report" type="button" onClick={() => setIntakeOpen(true)}><Icon name="plus" size={16} />New report</button></section>
 
-      <section className="kpi-grid" aria-label="Maintenance summary"><KpiCard label="Open work orders" value={kpis.openWorkOrders} icon="clipboard" /><KpiCard label="Open emergencies" value={kpis.openEmergencies} icon="alert" tone="risk" /><KpiCard label="Needs follow-up" value={kpis.needsFollowUp} icon="follow" tone="warning" /><KpiCard label="Completed work orders" value={kpis.completedWorkOrders} icon="check" tone="complete" /></section>
+      <section className="kpi-grid" aria-label="Maintenance summary"><KpiCard label="Open work orders" value={ticketsLoadFailed || loading ? "—" : kpis.openWorkOrders} icon="clipboard" /><KpiCard label="Open emergencies" value={ticketsLoadFailed || loading ? "—" : kpis.openEmergencies} icon="alert" tone="risk" /><KpiCard label="Needs follow-up" value={ticketsLoadFailed || loading ? "—" : kpis.needsFollowUp} icon="follow" tone="warning" /><KpiCard label="Completed work orders" value={ticketsLoadFailed || loading ? "—" : kpis.completedWorkOrders} icon="check" tone="complete" /></section>
 
       {error && <div className="page-message error" role="alert"><Icon name="alert" size={16} /><span>{error}</span><button type="button" className="retry-button" onClick={handleRetry}>Retry</button></div>}
       {notice && <div className="page-message success" role="status"><Icon name="check" size={16} />{notice}</div>}
